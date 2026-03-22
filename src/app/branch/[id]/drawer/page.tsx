@@ -58,8 +58,8 @@ function DrawerContent() {
       returns: data.returns, salariesAdvances: data.salariesAdvances,
       actualBalance: data.actualBalance, notes: data.notes,
     });
-    setSoldItems(data.soldItems);
-    setBankTransfers(data.bankTransfers);
+    setSoldItems(data.soldItems ?? []);
+    setBankTransfers(data.bankTransfers ?? []);
     try { setFieldNotes(JSON.parse(data.fieldNotes || "{}")); } catch { setFieldNotes({}); }
     setLoading(false);
   }, [branchId, date]);
@@ -142,7 +142,7 @@ function DrawerContent() {
   const readOnly = isViewer || drawer.isLocked;
   const canEdit = !readOnly;
 
-  const bankTotal = bankTransfers.reduce((s, b) => s + b.amount, 0);
+  const bankTotal = (bankTransfers ?? []).reduce((s, b) => s + b.amount, 0);
   const balanceValue = fields.balanceValue ?? 0;
   const cashSales = (fields.totalSales ?? 0) - balanceValue;
   const bookBalance = computeBookBalance(fields, bankTransfers);
