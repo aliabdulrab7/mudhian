@@ -50,3 +50,4 @@ prisma/*.db-wal
 
 # Claude Code local settings
 .claude/
+*.swp

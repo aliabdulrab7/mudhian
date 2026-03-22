@@ -27,8 +27,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     customerDepositsIn, adminWithdrawals, previousEarnest, boxesBags, cashPurchases,
     storeExpenses, customerDepositsOut, returns, salariesAdvances, actualBalance,
     bookBalance, notes, fieldNotes, isLocked,
-    soldItems,     // [{ id, quantity }]
-    bankTransfers, // [{ id, amount, beneficiary, notes }]
+    soldItems,      // [{ id, quantity }]
+    bankTransfers,  // [{ id, amount, beneficiary, notes }]
+    customFields,   // Record<string, number> — stored as JSON string
   } = body;
 
   // Update scalar fields
@@ -53,6 +54,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(bookBalance !== undefined && { bookBalance }),
       ...(notes !== undefined && { notes }),
       ...(fieldNotes !== undefined && { fieldNotes }),
+      ...(customFields !== undefined && { customFields: typeof customFields === "string" ? customFields : JSON.stringify(customFields) }),
       ...(isLocked !== undefined && { isLocked }),
     },
   });

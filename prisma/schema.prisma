@@ -63,9 +63,10 @@ model DailyDrawer {
   // صافي رصيد الدرج الدفتري (مخزّن للرجوع إليه في اليوم التالي)
   bookBalance Float @default(0)
 
-  notes      String  @default("")
-  fieldNotes String  @default("{}") // JSON: { fieldKey: "ملاحظة" }
-  isLocked   Boolean @default(false)
+  notes        String  @default("[]")   // JSON array of note strings
+  fieldNotes   String  @default("{}")   // JSON: { fieldKey: "ملاحظة" }
+  customFields String  @default("{}")   // JSON: { rowKey: value } for template custom rows
+  isLocked     Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -93,6 +94,12 @@ model AuditLog {
   action    String
   details   String   @default("")
   createdAt DateTime @default(now())
+}
+
+// إعدادات النظام (admin-controlled global settings)
+model AppSetting {
+  key   String @id
+  value String @default("")
 }
 
 // الحوالات البنكية (5 بنوك ثابتة)

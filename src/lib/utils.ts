@@ -1,9 +1,9 @@
 export function formatCurrency(amount: number): string {
   const formatted = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(amount);
-  return `${formatted} ر.س`;
+  return `${formatted} ريال`;
 }
 
 export function formatDate(date: Date | string): string {

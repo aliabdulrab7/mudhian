@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye } from "lucide-react";
+import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye, LayoutTemplate, GripVertical, X } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { parseTemplate, DEFAULT_TEMPLATE, type TemplateRow } from "@/lib/drawerTemplate";
 
 interface Branch {
   id: number; name: string; branchNum: string;
@@ -13,7 +14,7 @@ interface AuditEntry {
 }
 
 interface Viewer { id: number; username: string; createdAt: string; }
-type Tab = "branches" | "viewers" | "audit";
+type Tab = "branches" | "viewers" | "audit" | "template";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("branches");
@@ -42,6 +43,13 @@ export default function AdminPage() {
   const [auditPages, setAuditPages] = useState(1);
   const [auditTotal, setAuditTotal] = useState(0);
 
+  // Template
+  const [template, setTemplate] = useState<TemplateRow[]>(DEFAULT_TEMPLATE);
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [templateSaved, setTemplateSaved] = useState(false);
+  const [newRowForm, setNewRowForm] = useState({ label: "", sign: "+" as "+" | "-" });
+  const [showNewRow, setShowNewRow] = useState(false);
+
   const fetchBranches = useCallback(async () => {
     const res = await fetch("/api/branches");
     setBranches(await res.json());
@@ -66,9 +74,44 @@ export default function AdminPage() {
     setAuditLoading(false);
   }, []);
 
+  const fetchTemplate = useCallback(async () => {
+    const res = await fetch("/api/settings?key=drawerTemplate");
+    if (res.ok) {
+      const data = await res.json();
+      setTemplate(parseTemplate(data.value));
+    }
+  }, []);
+
+  const saveTemplate = async () => {
+    setTemplateSaving(true);
+    await fetch("/api/settings", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "drawerTemplate", value: JSON.stringify(template) }),
+    });
+    setTemplateSaving(false); setTemplateSaved(true);
+    setTimeout(() => setTemplateSaved(false), 2500);
+  };
+
+  const toggleRow = (key: string) => {
+    setTemplate(prev => prev.map(r => r.key === key ? { ...r, enabled: !r.enabled } : r));
+  };
+
+  const removeRow = (key: string) => {
+    setTemplate(prev => prev.filter(r => r.key !== key));
+  };
+
+  const addCustomRow = () => {
+    if (!newRowForm.label.trim()) return;
+    const key = `custom_${Date.now()}`;
+    setTemplate(prev => [...prev, { key, label: newRowForm.label.trim(), sign: newRowForm.sign, enabled: true, custom: true }]);
+    setNewRowForm({ label: "", sign: "+" });
+    setShowNewRow(false);
+  };
+
   useEffect(() => { fetchBranches(); }, [fetchBranches]);
   useEffect(() => { if (tab === "viewers") fetchViewers(); }, [tab, fetchViewers]);
   useEffect(() => { if (tab === "audit") fetchAudit(1); }, [tab, fetchAudit]);
+  useEffect(() => { if (tab === "template") fetchTemplate(); }, [tab, fetchTemplate]);
 
   const openAdd = () => { setForm({ name: "", branchNum: "", username: "", password: "", role: "branch" }); setError(""); setShowAdd(true); };
   const openEdit = (branch: Branch) => { setForm({ name: branch.name, branchNum: branch.branchNum, username: branch.users[0]?.username ?? "", password: "", role: "branch" }); setError(""); setEditBranch(branch); };
@@ -153,6 +196,9 @@ export default function AdminPage() {
         </button>
         <button onClick={() => setTab("audit")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "audit" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
           <ClipboardList size={14} /> سجل التغييرات
+        </button>
+        <button onClick={() => setTab("template")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "template" ? "bg-white shadow-sm text-orange-700" : "text-slate-500 hover:text-slate-700"}`}>
+          <LayoutTemplate size={14} /> قالب اليومية
         </button>
       </div>
 
@@ -277,6 +323,104 @@ export default function AdminPage() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Template Tab */}
+      {tab === "template" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-slate-700">صفوف حساب الرصيد</p>
+                <p className="text-xs text-slate-400 mt-0.5">فعّل أو أوقف أي صف، أو أضف صفوفاً مخصصة جديدة</p>
+              </div>
+              <div className="flex items-center gap-2">
+                {templateSaved && <span className="text-xs text-emerald-600 font-medium">✓ تم الحفظ</span>}
+                <button onClick={saveTemplate} disabled={templateSaving}
+                  className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs font-medium px-4 py-2 rounded-xl transition disabled:opacity-60">
+                  {templateSaving ? "جاري الحفظ..." : "حفظ القالب"}
+                </button>
+              </div>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {template.map((row) => (
+                <div key={row.key} className={`flex items-center gap-3 px-4 py-3 ${!row.enabled ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"} transition`}>
+                  <GripVertical size={14} className="text-slate-300 shrink-0" />
+                  <span className={`text-xs font-black w-5 text-center shrink-0 ${row.sign === "+" ? "text-blue-500" : "text-rose-400"}`}>
+                    {row.sign === "+" ? "+" : "−"}
+                  </span>
+                  <span className="text-sm text-slate-700 flex-1">{row.label}</span>
+                  {row.custom && (
+                    <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">مخصص</span>
+                  )}
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={row.enabled} onChange={() => toggleRow(row.key)}
+                      className="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
+                    <span className="text-xs text-slate-500">{row.enabled ? "مفعّل" : "موقوف"}</span>
+                  </label>
+                  {row.custom && (
+                    <button onClick={() => removeRow(row.key)}
+                      className="text-slate-300 hover:text-red-500 transition p-1">
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Add new custom row */}
+            {showNewRow ? (
+              <div className="border-t border-dashed border-slate-200 p-4 bg-orange-50">
+                <p className="text-xs font-semibold text-slate-600 mb-3">إضافة صف مخصص جديد</p>
+                <div className="flex gap-2 items-end flex-wrap">
+                  <div className="flex-1 min-w-40">
+                    <label className="text-xs text-slate-500 mb-1 block">اسم الصف</label>
+                    <input type="text" value={newRowForm.label}
+                      onChange={(e) => setNewRowForm({ ...newRowForm, label: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === "Enter") addCustomRow(); }}
+                      placeholder="مثال: يخصم مصاريف توصيل"
+                      className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="w-32">
+                    <label className="text-xs text-slate-500 mb-1 block">النوع</label>
+                    <select value={newRowForm.sign} onChange={(e) => setNewRowForm({ ...newRowForm, sign: e.target.value as "+" | "-" })}
+                      className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white">
+                      <option value="+">+ إضافة</option>
+                      <option value="-">− خصم</option>
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={addCustomRow}
+                      className="bg-orange-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-orange-700 transition font-medium">
+                      إضافة
+                    </button>
+                    <button onClick={() => { setShowNewRow(false); setNewRowForm({ label: "", sign: "+" }); }}
+                      className="bg-slate-100 text-slate-600 text-sm px-3 py-2 rounded-xl hover:bg-slate-200 transition">
+                      إلغاء
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="border-t border-dashed border-slate-200 p-3">
+                <button onClick={() => setShowNewRow(true)}
+                  className="flex items-center gap-1.5 text-sm text-orange-600 hover:text-orange-800 hover:bg-orange-50 px-3 py-2 rounded-xl transition w-full justify-center font-medium">
+                  <Plus size={14} /> إضافة صف جديد للحساب
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-700">
+            <p className="font-semibold mb-1">ملاحظة:</p>
+            <p>• الصفوف الموقوفة تظل محفوظة في البيانات لكنها لا تظهر في اليومية</p>
+            <p>• الصفوف المخصصة قابلة للحذف نهائياً من القالب</p>
+            <p>• لا تنسَ الضغط على &quot;حفظ القالب&quot; بعد أي تغيير</p>
+          </div>
         </div>
       )}
 

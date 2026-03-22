@@ -1,36 +1,107 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# يومية المضيان للمجوهرات
 
-## Getting Started
+نظام إدارة اليوميات المحاسبية للفروع — تطبيق ويب متعدد الفروع لمتجر مجوهرات.
 
-First, run the development server:
+---
+
+## المميزات
+
+- **اليومية اليومية**: تطابق تماماً نموذج اليومية الورقية — مبيعات مصنفة، تحويلات بنكية، حساب الرصيد الدفتري، وموازنة الصندوق.
+- **أرشيف شهري**: عرض يوميات الأشهر الماضية لكل فرع.
+- **لوحة تحكم للمدير**: ملخص يومي لجميع الفروع في جدول واحد.
+- **إدارة الفروع والمستخدمين**: إنشاء فروع وحسابات من صفحة الإدارة.
+- **قالب اليومية قابل للتخصيص**: المدير يضيف/يحذف/يفعّل صفوف الحسابات.
+- **بنوك ديناميكية**: إضافة وحذف بنوك في التحويلات.
+- **ملاحظات ديناميكية**: إضافة وحذف سطور الملاحظات.
+- **إعدادات المستخدم**: المظهر (فاتح/داكن)، تنسيق الأرقام، لغة الأرقام (عربي/إنجليزي).
+- **دعم كامل للعربية**: واجهة RTL بالكامل، دعم الأرقام العربية.
+- **حفظ تلقائي**: تغييرات اليومية تُحفظ تلقائياً بعد 1.5 ثانية من التوقف.
+
+---
+
+## الأدوار
+
+| الدور | الصلاحيات |
+|-------|-----------|
+| `admin` | لوحة التحكم، التقارير، إدارة النظام، تعديل قالب اليومية |
+| `branch` | يومية الفرع الخاص به فقط + الأرشيف |
+| `viewer` | لوحة التحكم والتقارير (قراءة فقط، بدون تعديل) |
+
+---
+
+## التقنيات
+
+- **Next.js 16** (App Router) + TypeScript
+- **Tailwind CSS v4**
+- **Prisma 7** + SQLite (`@prisma/adapter-libsql`)
+- **jose** — JWT في كوكي httpOnly
+- **bcryptjs** — تشفير كلمات المرور
+
+---
+
+## التثبيت والتشغيل
 
 ```bash
+# 1. تثبيت الحزم
+npm install
+
+# 2. إعداد قاعدة البيانات
+npx prisma migrate dev --name init
+npx prisma generate
+
+# 3. تشغيل السيرفر
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ثم افتح المتصفح على `http://localhost:3000` وقم بإنشاء حساب المدير:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+http://localhost:3000/api/seed
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**بيانات الدخول الافتراضية:** `admin` / `admin123`
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## الإعداد الأولي بعد الدخول
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. سجّل الدخول بحساب `admin`
+2. اذهب إلى **إدارة النظام** (`/admin`)
+3. أنشئ الفروع وحسابات الموظفين
+4. يمكن تعديل قالب اليومية من تبويب **قالب اليومية**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## ملفات البيئة
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+أنشئ ملف `.env` في جذر المشروع:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```env
+DATABASE_URL="file:./prisma/dev.db"
+JWT_SECRET="your-secret-key-here"
+```
+
+---
+
+## الأوامر المتاحة
+
+```bash
+npm run dev       # سيرفر التطوير
+npm run build     # بناء الإنتاج
+npm run lint      # فحص الكود
+
+npx prisma studio          # واجهة رسومية لقاعدة البيانات
+npx prisma migrate dev     # تطبيق تغييرات الـ schema
+npx prisma generate        # إعادة توليد الـ client
+```
+
+---
+
+## حسابات اليومية
+
+| الحساب | الطريقة |
+|--------|---------|
+| `balanceValue` | يُدخله المستخدم يدوياً (مبيعات الشبكة/البنك) |
+| `cashSales` | `إجمالي المبيعات − قيمة الموازنة` |
+| `bookBalance` | `مبيعات النقد + الإضافات − الخصومات` |
+| `difference` | `الرصيد الفعلي − الرصيد الدفتري` |

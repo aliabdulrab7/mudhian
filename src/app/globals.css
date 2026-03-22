@@ -1,43 +1,196 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   COLOR TOKENS — Light Mode
+   Primary: Navy Blue #1e3a5f
+   ============================================================ */
 :root {
-  --background: #f8fafc;
-  --foreground: #1e293b;
+  /* Brand */
+  --navy:        #1e3a5f;
+  --navy-light:  #2d5282;
+  --navy-dark:   #152b45;
+
+  /* Page */
+  --background:  #edf1f8;
+  --foreground:  #0f172a;
+
+  /* Cards */
+  --card:        #ffffff;
+  --card-alt:    #f5f7fb;
+  --border:      #e2e8f0;
+  --border-soft: #f1f5f9;
+
+  /* Text */
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+
+  /* Accents */
+  --accent-blue:    #3b82f6;
+  --accent-emerald: #059669;
+  --accent-amber:   #d97706;
+  --accent-rose:    #e11d48;
+
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(30, 58, 95, 0.08);
+  --shadow-card-hover: 0 8px 32px rgba(30, 58, 95, 0.13);
 }
 
+/* ============================================================
+   COLOR TOKENS — Dark Mode (Deep Navy theme)
+   ============================================================ */
+.dark {
+  --background:  #091520;
+  --foreground:  #e2e8f0;
+
+  --card:        #0f2035;
+  --card-alt:    #0a1828;
+  --border:      #1e3a5f;
+  --border-soft: #152b45;
+
+  --text-primary:   #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Segoe UI", Tahoma, Arial, Helvetica, sans-serif;
 }
 
+/* ============================================================
+   NAVY UTILITY CLASS (used in NavBar)
+   ============================================================ */
+.bg-navy { background-color: var(--navy); }
+.dark .bg-navy { background-color: #0a1e35; }
+
+/* ============================================================
+   CARD UTILITY (floating card on soft background)
+   ============================================================ */
+.card {
+  background: var(--card);
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.card-hover:hover {
+  box-shadow: var(--shadow-card-hover);
+  transition: box-shadow 0.2s ease;
+}
+
+/* ============================================================
+   DARK MODE — Smart class overrides
+   These override Tailwind utility classes site-wide in dark mode
+   ============================================================ */
+
+/* Backgrounds */
+.dark .bg-white        { background-color: var(--card)     !important; }
+.dark .bg-gray-50      { background-color: var(--card-alt) !important; }
+.dark .bg-slate-50     { background-color: var(--card-alt) !important; }
+.dark .bg-slate-100    { background-color: #152840         !important; }
+.dark .bg-slate-200    { background-color: #1e3a5f         !important; }
+
+/* Borders */
+.dark .border-slate-200 { border-color: var(--border)      !important; }
+.dark .border-slate-100 { border-color: var(--border-soft) !important; }
+.dark .border-gray-200  { border-color: var(--border)      !important; }
+
+/* Text */
+.dark .text-slate-900  { color: #f1f5f9 !important; }
+.dark .text-slate-800  { color: #e2e8f0 !important; }
+.dark .text-slate-700  { color: #cbd5e1 !important; }
+.dark .text-slate-600  { color: #94a3b8 !important; }
+.dark .text-slate-500  { color: #64748b !important; }
+.dark .text-slate-400  { color: #475569 !important; }
+.dark .text-gray-800   { color: #e2e8f0 !important; }
+.dark .text-gray-700   { color: #cbd5e1 !important; }
+.dark .text-gray-600   { color: #94a3b8 !important; }
+
+/* Inputs & Textareas */
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: #0a1e35  !important;
+  color:            #e2e8f0  !important;
+  border-color:     #1e3a5f  !important;
+}
+
+/* Shadows */
+.dark .shadow-sm  { box-shadow: 0 1px 4px rgba(0,0,0,0.5)  !important; }
+.dark .shadow     { box-shadow: 0 2px 8px rgba(0,0,0,0.6)  !important; }
+.dark .shadow-lg  { box-shadow: 0 4px 20px rgba(0,0,0,0.7) !important; }
+
+/* Cards built with bg-white get good dark equivalent */
+.dark .rounded-2xl.bg-white,
+.dark .rounded-xl.bg-white {
+  background-color: var(--card) !important;
+}
+
+/* Gradient overrides (book balance section, etc) */
+.dark .from-rose-50    { --tw-gradient-from: #2a0f18 !important; }
+.dark .from-blue-50    { --tw-gradient-from: #0a1e35 !important; }
+.dark .to-slate-50     { --tw-gradient-to:   #0f2035 !important; }
+
+/* Colored section backgrounds — keep accessible in dark mode */
+.dark .bg-emerald-50   { background-color: #052e16 !important; }
+.dark .bg-amber-50     { background-color: #1c1002 !important; }
+.dark .bg-rose-50      { background-color: #1f0a10 !important; }
+.dark .bg-blue-50      { background-color: #0c1a2e !important; }
+.dark .bg-orange-50    { background-color: #1a0d00 !important; }
+.dark .bg-red-50       { background-color: #1f0a0a !important; }
+.dark .bg-violet-50    { background-color: #130a1f !important; }
+.dark .bg-indigo-50    { background-color: #0e0a1f !important; }
+
+/* Keep accent text colors vivid in dark mode */
+.dark .text-emerald-700 { color: #34d399 !important; }
+.dark .text-emerald-800 { color: #6ee7b7 !important; }
+.dark .text-amber-700   { color: #fbbf24 !important; }
+.dark .text-amber-800   { color: #fde68a !important; }
+.dark .text-rose-600    { color: #fb7185 !important; }
+.dark .text-blue-700    { color: #60a5fa !important; }
+.dark .text-blue-600    { color: #93c5fd !important; }
+.dark .text-orange-600  { color: #fb923c !important; }
+
+/* Divide lines */
+.dark .divide-slate-100 > * + * { border-color: var(--border-soft) !important; }
+.dark .divide-y > * + *         { border-color: var(--border)      !important; }
+
+/* Hover backgrounds */
+.dark .hover\:bg-slate-50:hover  { background-color: #0f2035 !important; }
+.dark .hover\:bg-slate-100:hover { background-color: #152840 !important; }
+.dark .hover\:bg-slate-200:hover { background-color: #1e3a5f !important; }
+
+/* Tabs active */
+.dark .bg-white.shadow-sm { background-color: #0f2035 !important; }
+
+/* print-only hidden by default */
+.print-only { display: none; }
+
+/* ============================================================
+   PRINT STYLES — Single A4 page
+   ============================================================ */
 @media print {
-  nav { display: none !important; }
-  body { background: white; font-size: 12px; }
-  .no-print { display: none !important; }
+  nav, .no-print { display: none !important; }
+  body { background: white !important; color: black !important; }
 
-  /* إعدادات الصفحة للطباعة */
-  @page {
-    margin: 1.5cm;
-    size: A4;
-  }
+  @page { margin: 0.8cm; size: A4 portrait; }
 
-  /* منع قطع الجداول بين الصفحات */
-  table { page-break-inside: avoid; border-collapse: collapse; width: 100%; }
-  tr { page-break-inside: avoid; }
-  thead { display: table-header-group; }
-
-  /* إظهار الألوان عند الطباعة */
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
-  /* إخفاء الشاشة وإظهار ما يُطبع فقط */
-  .print-only { display: block !important; }
-
-  /* تحسين مظهر الإدخالات للطباعة */
-  input, textarea {
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    font-weight: bold;
+  .print-only {
+    display: block !important;
+    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+    direction: rtl;
+    font-size: 10.5px;
+    color: #0f172a;
   }
+
+  .print-only table { border-collapse: collapse; width: 100%; }
+  .print-only tr    { page-break-inside: avoid; }
 }
