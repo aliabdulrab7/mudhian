@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #1e293b;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: "Segoe UI", Tahoma, Arial, Helvetica, sans-serif;
+}
+
+@media print {
+  nav { display: none !important; }
+  body { background: white; font-size: 12px; }
+  .no-print { display: none !important; }
+
+  /* إعدادات الصفحة للطباعة */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  /* منع قطع الجداول بين الصفحات */
+  table { page-break-inside: avoid; border-collapse: collapse; width: 100%; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+
+  /* إظهار الألوان عند الطباعة */
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+  /* إخفاء الشاشة وإظهار ما يُطبع فقط */
+  .print-only { display: block !important; }
+
+  /* تحسين مظهر الإدخالات للطباعة */
+  input, textarea {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    font-weight: bold;
+  }
+}

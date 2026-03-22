@@ -1,0 +1,104 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ==================== المستخدمون والفروع ====================
+
+model Branch {
+  id        Int           @id @default(autoincrement())
+  name      String        @unique
+  branchNum String        @default("")
+  createdAt DateTime      @default(now())
+  users     User[]
+  drawers   DailyDrawer[]
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  role      String   @default("branch") // "admin" | "branch"
+  branchId  Int?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ==================== اليومية ====================
+
+model DailyDrawer {
+  id       Int      @id @default(autoincrement())
+  branchId Int
+  branch   Branch   @relation(fields: [branchId], references: [id])
+  date     DateTime
+
+  // إجمالي قيمة المبيعات اليومية (يدوي)
+  totalSales   Float @default(0)
+  // قيمة الموازنة (يدوي = مبيعات البنك/الشبكة)
+  balanceValue Float @default(0)
+
+  // الإضافات (+)
+  yesterdayBalance   Float @default(0) // يضاف رصيد أمس
+  earnestReceived    Float @default(0) // يضاف عرابين مستلمة
+  staffDeposits      Float @default(0) // مستلم أمانات سابقة لدى الموظفين / إضافات أخرى
+  customerDepositsIn Float @default(0) // مستلم أمانات سابقة لدى الزبائن
+
+  // الخصومات (-)
+  adminWithdrawals    Float @default(0) // يخصم مسحوبات أبوسلطان
+  previousEarnest     Float @default(0) // يخصم عرابين سابقة
+  boxesBags           Float @default(0) // يخصم مشتريات علب وأكياس
+  cashPurchases       Float @default(0) // يخصم مشتريات بضاعة كاش
+  storeExpenses       Float @default(0) // يخصم مصروفات محل
+  customerDepositsOut Float @default(0) // يخصم أمانات لدى الزبائن أو المحلات
+  returns             Float @default(0) // يخصم المرتجع والمستبدل من الزبائن
+  salariesAdvances    Float @default(0) // رواتب وسلف وخصومات أخرى
+
+  // الرصيد الفعلي (يدخله الموظف)
+  actualBalance Float @default(0)
+
+  // صافي رصيد الدرج الدفتري (مخزّن للرجوع إليه في اليوم التالي)
+  bookBalance Float @default(0)
+
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  soldItems     SoldItem[]
+  bankTransfers BankTransfer[]
+
+  @@unique([branchId, date])
+}
+
+// الأصناف المباعة (6 أصناف ثابتة)
+model SoldItem {
+  id       Int         @id @default(autoincrement())
+  drawerId Int
+  drawer   DailyDrawer @relation(fields: [drawerId], references: [id], onDelete: Cascade)
+  category String      // طقم، خاتم، حلق، اسوارة، تعليقة، نص طقم
+  quantity Int         @default(0)
+}
+
+// سجل التغييرات
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  username  String
+  action    String
+  details   String   @default("")
+  createdAt DateTime @default(now())
+}
+
+// الحوالات البنكية (5 بنوك ثابتة)
+model BankTransfer {
+  id          Int         @id @default(autoincrement())
+  drawerId    Int
+  drawer      DailyDrawer @relation(fields: [drawerId], references: [id], onDelete: Cascade)
+  bankName    String      // الانماء، الراجحي، الرياض، ساب، الاهلي
+  amount      Float       @default(0)
+  beneficiary String      @default("")
+  notes       String      @default("")
+}
