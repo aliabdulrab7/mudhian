@@ -25,21 +25,8 @@ export async function GET(req: NextRequest) {
     if (!drawer) return { branch, hasData: false };
 
     const bankTotal = drawer.bankTransfers.reduce((s, b) => s + b.amount, 0);
-    const cashSales = drawer.totalSales - bankTotal;
-    const bookBalance = cashSales
-      + drawer.yesterdayBalance
-      + drawer.earnestReceived
-      + drawer.staffDeposits
-      + drawer.customerDepositsIn
-      - drawer.adminWithdrawals
-      - drawer.previousEarnest
-      - drawer.boxesBags
-      - drawer.cashPurchases
-      - drawer.storeExpenses
-      - drawer.customerDepositsOut
-      - bankTotal
-      - drawer.returns
-      - drawer.salariesAdvances;
+    const cashSales = drawer.totalSales - drawer.balanceValue;
+    const bookBalance = drawer.bookBalance;
     const difference = drawer.actualBalance - bookBalance;
 
     return {

@@ -26,18 +26,17 @@ export async function GET(req: NextRequest) {
       return { branch, daysCount: 0, totalSales: 0, bankTotal: 0, cashSales: 0, bookBalance: 0, actualBalance: 0, avgDailySales: 0, soldItemsTotal: 0 };
     }
 
-    let totalSales = 0, bankTotal = 0, bookBalance = 0, actualBalance = 0, soldItemsTotal = 0;
+    let totalSales = 0, bankTotal = 0, cashSales = 0, bookBalance = 0, actualBalance = 0, soldItemsTotal = 0;
 
     for (const d of branchDrawers) {
       const bt = d.bankTransfers.reduce((s, b) => s + b.amount, 0);
       totalSales += d.totalSales;
       bankTotal += bt;
+      cashSales += d.totalSales - d.balanceValue;
       bookBalance += d.bookBalance;
       actualBalance += d.actualBalance;
       soldItemsTotal += d.soldItems.reduce((s, i) => s + i.quantity, 0);
     }
-
-    const cashSales = totalSales - bankTotal;
     return {
       branch,
       daysCount: branchDrawers.length,
