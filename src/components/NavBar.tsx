@@ -40,6 +40,11 @@ export default function NavBar() {
             <NavItem href="/reports" icon={<BarChart3 size={15} />} label="التقارير" active={pathname.startsWith("/reports")} />
             <NavItem href="/admin" icon={<Settings size={15} />} label="إدارة النظام" active={pathname.startsWith("/admin")} />
           </>
+        ) : user.role === "viewer" ? (
+          <>
+            <NavItem href="/dashboard" icon={<LayoutDashboard size={15} />} label="لوحة التحكم" active={pathname.startsWith("/dashboard")} />
+            <NavItem href="/reports" icon={<BarChart3 size={15} />} label="التقارير" active={pathname.startsWith("/reports")} />
+          </>
         ) : (
           <>
             <NavItem href={`/branch/${branchId}/drawer`} icon={<BookOpen size={15} />} label="اليومية" active={pathname.includes("/drawer")} />
@@ -49,7 +54,7 @@ export default function NavBar() {
 
         <div className="mr-auto flex items-center gap-3">
           <span className="text-xs text-slate-400 hidden sm:block">
-            {user.role === "admin" ? "مدير النظام" : user.branchName}
+            {user.role === "admin" ? "مدير النظام" : user.role === "viewer" ? "مراقب" : user.branchName}
           </span>
           <span className="text-xs text-slate-500 font-medium hidden sm:block bg-slate-100 px-2 py-0.5 rounded-full">{user.username}</span>
           <button

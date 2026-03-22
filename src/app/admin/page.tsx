@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList } from "lucide-react";
+import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 
 interface Branch {
@@ -12,7 +12,8 @@ interface AuditEntry {
   id: number; username: string; action: string; details: string; createdAt: string;
 }
 
-type Tab = "branches" | "audit";
+interface Viewer { id: number; username: string; createdAt: string; }
+type Tab = "branches" | "viewers" | "audit";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("branches");
@@ -21,12 +22,18 @@ export default function AdminPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editBranch, setEditBranch] = useState<Branch | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ name: "", branchNum: "", username: "", password: "" });
+  const [form, setForm] = useState({ name: "", branchNum: "", username: "", password: "", role: "branch" });
   const [pwForm, setPwForm] = useState({ currentPassword: "", newPassword: "", confirm: "" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
+
+  // Viewers
+  const [viewers, setViewers] = useState<Viewer[]>([]);
+  const [showAddViewer, setShowAddViewer] = useState(false);
+  const [viewerForm, setViewerForm] = useState({ username: "", password: "" });
+  const [viewerError, setViewerError] = useState("");
 
   // Audit
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([]);
@@ -39,6 +46,11 @@ export default function AdminPage() {
     const res = await fetch("/api/branches");
     setBranches(await res.json());
     setLoading(false);
+  }, []);
+
+  const fetchViewers = useCallback(async () => {
+    const res = await fetch("/api/viewers");
+    if (res.ok) setViewers(await res.json());
   }, []);
 
   const fetchAudit = useCallback(async (page = 1) => {
@@ -55,10 +67,11 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => { fetchBranches(); }, [fetchBranches]);
+  useEffect(() => { if (tab === "viewers") fetchViewers(); }, [tab, fetchViewers]);
   useEffect(() => { if (tab === "audit") fetchAudit(1); }, [tab, fetchAudit]);
 
-  const openAdd = () => { setForm({ name: "", branchNum: "", username: "", password: "" }); setError(""); setShowAdd(true); };
-  const openEdit = (branch: Branch) => { setForm({ name: branch.name, branchNum: branch.branchNum, username: branch.users[0]?.username ?? "", password: "" }); setError(""); setEditBranch(branch); };
+  const openAdd = () => { setForm({ name: "", branchNum: "", username: "", password: "", role: "branch" }); setError(""); setShowAdd(true); };
+  const openEdit = (branch: Branch) => { setForm({ name: branch.name, branchNum: branch.branchNum, username: branch.users[0]?.username ?? "", password: "", role: "branch" }); setError(""); setEditBranch(branch); };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true); setError("");
@@ -91,6 +104,19 @@ export default function AdminPage() {
 
   const handleBackup = () => { window.location.href = "/api/backup"; };
 
+  const handleAddViewer = async (e: React.FormEvent) => {
+    e.preventDefault(); setViewerError(""); setSaving(true);
+    const res = await fetch("/api/viewers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(viewerForm) });
+    if (!res.ok) { setViewerError((await res.json()).error || "حدث خطأ"); setSaving(false); return; }
+    setShowAddViewer(false); setViewerForm({ username: "", password: "" }); setSaving(false); fetchViewers();
+  };
+
+  const handleDeleteViewer = async (id: number, username: string) => {
+    if (!confirm(`حذف حساب المراقب "${username}"؟`)) return;
+    await fetch(`/api/viewers/${id}`, { method: "DELETE" });
+    fetchViewers();
+  };
+
   return (
     <div className="space-y-5">
       {/* Page Header */}
@@ -108,13 +134,22 @@ export default function AdminPage() {
               <Plus size={16} /> فرع جديد
             </button>
           )}
+          {tab === "viewers" && (
+            <button onClick={() => { setViewerForm({ username: "", password: "" }); setViewerError(""); setShowAddViewer(true); }}
+              className="flex items-center gap-2 bg-violet-600 text-white px-4 py-2 rounded-xl hover:bg-violet-700 transition text-sm">
+              <Plus size={16} /> مراقب جديد
+            </button>
+          )}
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
         <button onClick={() => setTab("branches")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "branches" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
           الفروع والحسابات
+        </button>
+        <button onClick={() => setTab("viewers")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "viewers" ? "bg-white shadow-sm text-violet-700" : "text-slate-500 hover:text-slate-700"}`}>
+          <Eye size={14} /> المراقبون
         </button>
         <button onClick={() => setTab("audit")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "audit" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
           <ClipboardList size={14} /> سجل التغييرات
@@ -159,6 +194,50 @@ export default function AdminPage() {
             </table>
           </div>
         )
+      )}
+
+      {/* Viewers Tab */}
+      {tab === "viewers" && (
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+          {viewers.length === 0 ? (
+            <div className="text-center py-16 text-slate-400 text-sm">
+              <Eye size={36} className="mx-auto mb-3 text-slate-200" />
+              <p>لا يوجد مراقبون بعد</p>
+              <button onClick={() => { setViewerForm({ username: "", password: "" }); setViewerError(""); setShowAddViewer(true); }}
+                className="mt-3 text-violet-600 hover:underline text-sm">أضف أول مراقب</button>
+            </div>
+          ) : (
+            <>
+              <div className="px-4 py-3 bg-violet-50 border-b border-violet-100">
+                <p className="text-xs text-violet-600 font-medium">المراقبون يستطيعون رؤية جميع الفروع والتقارير بدون صلاحية التعديل</p>
+              </div>
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600">اسم المستخدم</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600">تاريخ الإنشاء</th>
+                    <th className="px-4 py-3 w-16"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {viewers.map((v) => (
+                    <tr key={v.id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3 font-mono text-sm text-violet-700 font-bold">{v.username}</td>
+                      <td className="px-4 py-3 text-gray-400 text-xs">
+                        {new Date(v.createdAt).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "2-digit", day: "2-digit" })}
+                      </td>
+                      <td className="px-4 py-3">
+                        <button onClick={() => handleDeleteViewer(v.id, v.username)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </div>
       )}
 
       {/* Audit Tab */}
@@ -232,6 +311,24 @@ export default function AdminPage() {
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={saving} className="flex-1 bg-blue-700 text-white py-2 rounded-xl font-medium hover:bg-blue-800 disabled:opacity-60">{saving ? "جاري الحفظ..." : "تحديث"}</button>
               <button type="button" onClick={() => setEditBranch(null)} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-xl hover:bg-gray-200">إلغاء</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Add Viewer Modal */}
+      {showAddViewer && (
+        <Modal title="إضافة مراقب جديد" onClose={() => setShowAddViewer(false)}>
+          <div className="mb-3 p-3 bg-violet-50 rounded-xl text-xs text-violet-600">
+            المراقب يستطيع رؤية جميع الفروع والتقارير بدون صلاحية التعديل أو الحذف.
+          </div>
+          <form onSubmit={handleAddViewer} className="space-y-3">
+            <Field label="اسم المستخدم" value={viewerForm.username} onChange={(v) => setViewerForm({ ...viewerForm, username: v })} required />
+            <Field label="كلمة المرور" value={viewerForm.password} onChange={(v) => setViewerForm({ ...viewerForm, password: v })} required type="password" />
+            {viewerError && <p className="text-red-600 text-sm">{viewerError}</p>}
+            <div className="flex gap-2 pt-1">
+              <button type="submit" disabled={saving} className="flex-1 bg-violet-600 text-white py-2 rounded-xl font-medium hover:bg-violet-700 disabled:opacity-60">{saving ? "جاري الحفظ..." : "إضافة"}</button>
+              <button type="button" onClick={() => setShowAddViewer(false)} className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-xl hover:bg-gray-200">إلغاء</button>
             </div>
           </form>
         </Modal>

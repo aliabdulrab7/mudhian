@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth";
 // GET /api/dashboard?date=YYYY-MM-DD
 export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (session?.role !== "admin") return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  if (!session || (session.role !== "admin" && session.role !== "viewer")) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const date = req.nextUrl.searchParams.get("date");
   if (!date) return NextResponse.json({ error: "date required" }, { status: 400 });

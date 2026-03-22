@@ -7,30 +7,27 @@ import { logAction } from "@/lib/audit";
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session.role === "viewer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const drawerId = parseInt(id);
   const body = await req.json();
 
+  // Check lock status — only admin can update a locked drawer (or unlock it)
+  const existing = await prisma.dailyDrawer.findUnique({ where: { id: drawerId }, include: { branch: true } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const isChangingLock = body.isLocked !== undefined;
+  if (existing.isLocked && session.role !== "admin") {
+    return NextResponse.json({ error: "اليومية مقفلة — تواصل مع المدير" }, { status: 403 });
+  }
+
   const {
-    totalSales,
-    balanceValue,
-    yesterdayBalance,
-    earnestReceived,
-    staffDeposits,
-    customerDepositsIn,
-    adminWithdrawals,
-    previousEarnest,
-    boxesBags,
-    cashPurchases,
-    storeExpenses,
-    customerDepositsOut,
-    returns,
-    salariesAdvances,
-    actualBalance,
-    bookBalance,
-    notes,
-    soldItems,    // [{ id, quantity }]
+    totalSales, balanceValue, yesterdayBalance, earnestReceived, staffDeposits,
+    customerDepositsIn, adminWithdrawals, previousEarnest, boxesBags, cashPurchases,
+    storeExpenses, customerDepositsOut, returns, salariesAdvances, actualBalance,
+    bookBalance, notes, fieldNotes, isLocked,
+    soldItems,     // [{ id, quantity }]
     bankTransfers, // [{ id, amount, beneficiary, notes }]
   } = body;
 
@@ -55,6 +52,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       ...(actualBalance !== undefined && { actualBalance }),
       ...(bookBalance !== undefined && { bookBalance }),
       ...(notes !== undefined && { notes }),
+      ...(fieldNotes !== undefined && { fieldNotes }),
+      ...(isLocked !== undefined && { isLocked }),
     },
   });
 
@@ -79,8 +78,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     );
   }
 
-  const d = await prisma.dailyDrawer.findUnique({ where: { id: drawerId }, include: { branch: true } });
-  await logAction(session!, "تعديل يومية", `فرع: ${d?.branch?.name ?? drawerId} — تاريخ: ${d?.date?.toISOString().slice(0, 10) ?? ""}`);
+  // Log lock/unlock actions
+  if (isChangingLock) {
+    await logAction(session, isLocked ? "قفل يومية" : "فتح يومية",
+      `فرع: ${existing.branch?.name} — تاريخ: ${existing.date?.toISOString().slice(0, 10)}`);
+  } else {
+    await logAction(session, "تعديل يومية",
+      `فرع: ${existing.branch?.name} — تاريخ: ${existing.date?.toISOString().slice(0, 10)}`);
+  }
 
   return NextResponse.json(drawer);
 }

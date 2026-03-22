@@ -22,7 +22,7 @@ model User {
   id        Int      @id @default(autoincrement())
   username  String   @unique
   password  String
-  role      String   @default("branch") // "admin" | "branch"
+  role      String   @default("branch") // "admin" | "branch" | "viewer"
   branchId  Int?
   branch    Branch?  @relation(fields: [branchId], references: [id])
   createdAt DateTime @default(now())
@@ -63,7 +63,10 @@ model DailyDrawer {
   // صافي رصيد الدرج الدفتري (مخزّن للرجوع إليه في اليوم التالي)
   bookBalance Float @default(0)
 
-  notes     String   @default("")
+  notes      String  @default("")
+  fieldNotes String  @default("{}") // JSON: { fieldKey: "ملاحظة" }
+  isLocked   Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

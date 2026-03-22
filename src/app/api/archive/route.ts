@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
   if (session.role === "branch" && session.branchId !== branchId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  // viewer can see all branches, admin can see all
 
   const start = new Date(Date.UTC(year, month - 1, 1));
   const end = new Date(Date.UTC(year, month, 0, 23, 59, 59));

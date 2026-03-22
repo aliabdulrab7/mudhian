@@ -8,7 +8,7 @@ const SECRET = new TextEncoder().encode(
 export interface SessionUser {
   userId: number;
   username: string;
-  role: "admin" | "branch";
+  role: "admin" | "branch" | "viewer";
   branchId?: number;
   branchName?: string;
 }
