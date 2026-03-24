@@ -2,7 +2,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, TrendingUp, Banknote, Wallet, BookOpen, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { formatCurrency, todayISO } from "@/lib/utils";
+import { todayISO, shiftDate } from "@/lib/utils";
+import { useFormatCurrency } from "@/lib/userPrefs";
 
 interface BranchSummary {
   branch: { id: number; name: string; branchNum: string };
@@ -12,9 +13,11 @@ interface BranchSummary {
 }
 
 const DIFF_ALERT_THRESHOLD = 500;
+const CARD = "bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] overflow-hidden";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const fmt = useFormatCurrency();
   const [date, setDate] = useState(todayISO());
   const [data, setData] = useState<BranchSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,10 +31,7 @@ export default function DashboardPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const changeDate = (delta: number) => {
-    const d = new Date(date + "T00:00:00"); d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().split("T")[0]);
-  };
+  const changeDate = (delta: number) => { setDate(shiftDate(date, delta)); };
 
   const active = data.filter((d) => d.hasData);
   const missing = data.filter((d) => !d.hasData);
@@ -51,7 +51,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] px-5 py-4 flex items-center justify-between">
+      <div className={`${CARD} px-5 py-4 flex items-center justify-between`}>
         <div className="flex items-center gap-2">
           <button onClick={() => changeDate(-1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition"><ChevronRight size={16} /></button>
           <input
@@ -97,8 +97,8 @@ export default function DashboardPage() {
             <AlertTriangle size={16} className="text-amber-500" />
           </div>
           <div>
-            <p className="text-sm font-bold text-amber-700">فروع تجاوز فرقها {formatCurrency(DIFF_ALERT_THRESHOLD)}</p>
-            <p className="text-xs text-amber-500 mt-1">{largeDiff.map((r) => `${r.branch.name} (${formatCurrency(Math.abs(r.difference ?? 0))})`).join(" — ")}</p>
+            <p className="text-sm font-bold text-amber-700">فروع تجاوز فرقها {fmt(DIFF_ALERT_THRESHOLD)}</p>
+            <p className="text-xs text-amber-500 mt-1">{largeDiff.map((r) => `${r.branch.name} (${fmt(Math.abs(r.difference ?? 0))})`).join(" — ")}</p>
           </div>
         </div>
       )}
@@ -116,15 +116,15 @@ export default function DashboardPage() {
       {/* Summary Cards */}
       {!loading && active.length > 0 && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <SCard icon={<TrendingUp size={18} />} label="إجمالي المبيعات" value={formatCurrency(totals.totalSales)} grad="from-emerald-400 to-teal-500" />
-          <SCard icon={<Banknote size={18} />} label="إجمالي الحوالات" value={formatCurrency(totals.bankTotal)} grad="from-blue-500 to-cyan-400" />
-          <SCard icon={<Wallet size={18} />} label="إجمالي الكاش" value={formatCurrency(totals.cashSales)} grad="from-violet-500 to-purple-500" />
-          <SCard icon={<BookOpen size={18} />} label="إجمالي رصيد الدرج" value={formatCurrency(totals.bookBalance)} grad="from-rose-500 to-orange-400" />
+          <SCard icon={<TrendingUp size={18} />} label="إجمالي المبيعات" value={fmt(totals.totalSales)} grad="from-emerald-400 to-teal-500" />
+          <SCard icon={<Banknote size={18} />} label="إجمالي الحوالات" value={fmt(totals.bankTotal)} grad="from-blue-500 to-cyan-400" />
+          <SCard icon={<Wallet size={18} />} label="إجمالي الكاش" value={fmt(totals.cashSales)} grad="from-violet-500 to-purple-500" />
+          <SCard icon={<BookOpen size={18} />} label="إجمالي رصيد الدرج" value={fmt(totals.bookBalance)} grad="from-rose-500 to-orange-400" />
         </div>
       )}
 
       {/* Branches Table */}
-      <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] overflow-hidden">
+      <div className={CARD}>
         {loading ? (
           <div className="text-center py-20 text-slate-300 text-sm animate-pulse">جاري التحميل...</div>
         ) : (
@@ -156,18 +156,18 @@ export default function DashboardPage() {
                       </td>
                       {row.hasData ? (
                         <>
-                          <td className="px-5 py-4 font-bold text-emerald-600">{formatCurrency(row.totalSales!)}</td>
-                          <td className="px-5 py-4 text-blue-500 font-medium">{formatCurrency(row.bankTotal!)}</td>
-                          <td className="px-5 py-4 text-slate-500">{formatCurrency(row.cashSales!)}</td>
-                          <td className="px-5 py-4 font-bold text-rose-500">{formatCurrency(row.bookBalance!)}</td>
-                          <td className="px-5 py-4 text-slate-600">{formatCurrency(row.actualBalance!)}</td>
+                          <td className="px-5 py-4 font-bold text-emerald-600">{fmt(row.totalSales!)}</td>
+                          <td className="px-5 py-4 text-blue-500 font-medium">{fmt(row.bankTotal!)}</td>
+                          <td className="px-5 py-4 text-slate-500">{fmt(row.cashSales!)}</td>
+                          <td className="px-5 py-4 font-bold text-rose-500">{fmt(row.bookBalance!)}</td>
+                          <td className="px-5 py-4 text-slate-600">{fmt(row.actualBalance!)}</td>
                           <td className="px-5 py-4">
                             <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${
                               row.difference === 0 ? "bg-emerald-50 text-emerald-600"
                               : (row.difference ?? 0) > 0 ? "bg-blue-50 text-blue-600"
                               : "bg-red-50 text-red-500"
                             }`}>
-                              {row.difference === 0 ? "✓ متطابق" : formatCurrency(row.difference!)}
+                              {row.difference === 0 ? "✓ متطابق" : fmt(row.difference!)}
                             </span>
                           </td>
                         </>
@@ -189,10 +189,10 @@ export default function DashboardPage() {
                 <tfoot>
                   <tr style={{ background: "linear-gradient(135deg, #edf1f8, #e8edf5)" }}>
                     <td className="px-5 py-4 text-xs font-black text-slate-600">الإجمالي — {active.length} فروع</td>
-                    <td className="px-5 py-4 text-emerald-600 font-black text-sm">{formatCurrency(totals.totalSales)}</td>
-                    <td className="px-5 py-4 text-blue-500 font-bold text-sm">{formatCurrency(totals.bankTotal)}</td>
-                    <td className="px-5 py-4 text-slate-500 font-bold text-sm">{formatCurrency(totals.cashSales)}</td>
-                    <td className="px-5 py-4 text-rose-500 font-black text-sm">{formatCurrency(totals.bookBalance)}</td>
+                    <td className="px-5 py-4 text-emerald-600 font-black text-sm">{fmt(totals.totalSales)}</td>
+                    <td className="px-5 py-4 text-blue-500 font-bold text-sm">{fmt(totals.bankTotal)}</td>
+                    <td className="px-5 py-4 text-slate-500 font-bold text-sm">{fmt(totals.cashSales)}</td>
+                    <td className="px-5 py-4 text-rose-500 font-black text-sm">{fmt(totals.bookBalance)}</td>
                     <td colSpan={3}></td>
                   </tr>
                 </tfoot>

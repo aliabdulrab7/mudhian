@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { useFormatCurrency } from "@/lib/userPrefs";
 
 interface ArchiveEntry {
   id: number; date: string; totalSales: number; bankTotal: number;
@@ -10,10 +10,12 @@ interface ArchiveEntry {
 }
 
 const MONTHS = ["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+const CARD = "bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] overflow-hidden";
 
 export default function ArchivePage() {
   const params = useParams();
   const router = useRouter();
+  const fmt = useFormatCurrency();
   const branchId = parseInt(params.id as string);
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -47,7 +49,7 @@ export default function ArchivePage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm px-4 py-3 flex items-center justify-between">
+      <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button onClick={() => changeMonth(-1)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 transition"><ChevronRight size={18} /></button>
           <span className="text-sm font-semibold text-slate-700 min-w-[130px] text-center">{MONTHS[month - 1]} {year}</span>
@@ -75,14 +77,14 @@ export default function ArchivePage() {
               : "bg-rose-50 border-rose-100 text-rose-700"
             }`}>
               <p className="text-xs font-medium opacity-70 mb-1">{label}</p>
-              <p className="text-lg font-black">{formatCurrency(value)}</p>
+              <p className="text-lg font-black">{fmt(value)}</p>
             </div>
           ))}
         </div>
       )}
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] overflow-hidden">
         {loading ? (
           <div className="text-center py-16 text-slate-400 text-sm animate-pulse">جاري التحميل...</div>
         ) : entries.length === 0 ? (
@@ -110,18 +112,18 @@ export default function ArchivePage() {
                     <td className="px-4 py-3 font-semibold text-slate-700">
                       {new Date(e.date).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "2-digit", day: "2-digit" })}
                     </td>
-                    <td className="px-4 py-3 text-emerald-700 font-semibold">{formatCurrency(e.totalSales)}</td>
-                    <td className="px-4 py-3 text-blue-600">{formatCurrency(e.bankTotal)}</td>
-                    <td className="px-4 py-3 text-slate-600">{formatCurrency(e.cashSales)}</td>
-                    <td className="px-4 py-3 text-rose-600 font-bold">{formatCurrency(e.bookBalance)}</td>
-                    <td className="px-4 py-3 text-slate-700">{formatCurrency(e.actualBalance)}</td>
+                    <td className="px-4 py-3 text-emerald-700 font-semibold">{fmt(e.totalSales)}</td>
+                    <td className="px-4 py-3 text-blue-600">{fmt(e.bankTotal)}</td>
+                    <td className="px-4 py-3 text-slate-600">{fmt(e.cashSales)}</td>
+                    <td className="px-4 py-3 text-rose-600 font-bold">{fmt(e.bookBalance)}</td>
+                    <td className="px-4 py-3 text-slate-700">{fmt(e.actualBalance)}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
                         e.difference === 0 ? "bg-emerald-100 text-emerald-700"
                         : e.difference > 0 ? "bg-blue-100 text-blue-700"
                         : "bg-red-100 text-red-600"
                       }`}>
-                        {e.difference === 0 ? "متطابق" : formatCurrency(e.difference)}
+                        {e.difference === 0 ? "متطابق" : fmt(e.difference)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-blue-500 text-xs font-medium">فتح →</td>
@@ -131,10 +133,10 @@ export default function ArchivePage() {
               <tfoot className="bg-slate-50 border-t-2 border-slate-200">
                 <tr>
                   <td className="px-4 py-3 text-xs font-bold text-slate-600">مجموع الشهر ({entries.length} يوم)</td>
-                  <td className="px-4 py-3 text-emerald-700 font-bold text-xs">{formatCurrency(totals.totalSales)}</td>
-                  <td className="px-4 py-3 text-blue-600 font-bold text-xs">{formatCurrency(totals.bankTotal)}</td>
-                  <td className="px-4 py-3 text-slate-600 font-bold text-xs">{formatCurrency(totals.cashSales)}</td>
-                  <td className="px-4 py-3 text-rose-600 font-bold text-xs">{formatCurrency(totals.bookBalance)}</td>
+                  <td className="px-4 py-3 text-emerald-700 font-bold text-xs">{fmt(totals.totalSales)}</td>
+                  <td className="px-4 py-3 text-blue-600 font-bold text-xs">{fmt(totals.bankTotal)}</td>
+                  <td className="px-4 py-3 text-slate-600 font-bold text-xs">{fmt(totals.cashSales)}</td>
+                  <td className="px-4 py-3 text-rose-600 font-bold text-xs">{fmt(totals.bookBalance)}</td>
                   <td colSpan={3}></td>
                 </tr>
               </tfoot>

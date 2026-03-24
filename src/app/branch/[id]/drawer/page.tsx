@@ -4,15 +4,21 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, ChevronRight, Save, Printer, CheckCircle, Lock, LockOpen,
   MessageSquare, X, Plus, Trash2, ShoppingBag, Landmark, Calculator,
-  TrendingUp, Banknote, Wallet,
+  TrendingUp, Banknote, Wallet, Receipt,
 } from "lucide-react";
-import { todayISO } from "@/lib/utils";
+import { todayISO, shiftDate } from "@/lib/utils";
 import { useFormatCurrency } from "@/lib/userPrefs";
 import { parseTemplate, parseNotes, DEFAULT_TEMPLATE, type TemplateRow } from "@/lib/drawerTemplate";
+import { detectBarcodeType } from "@/lib/barcodeUtils";
 import type { SessionUser } from "@/lib/auth";
 
 interface SoldItem { id: number; category: string; quantity: number }
 interface BankTransfer { id: number; bankName: string; amount: number; beneficiary: string; notes: string }
+interface Invoice {
+  id: number; drawerId: number; type: "صميت" | "عادية";
+  invoiceNum: string; price: number; employeeName: string; employeeId: number | null; barcodes: string[];
+}
+interface Employee { id: number; name: string; }
 interface Drawer {
   id: number; branchId: number; date: string; totalSales: number; balanceValue: number;
   yesterdayBalance: number; earnestReceived: number; staffDeposits: number; customerDepositsIn: number;
@@ -21,6 +27,7 @@ interface Drawer {
   actualBalance: number; notes: string; fieldNotes: string; customFields: string; isLocked: boolean;
   soldItems: SoldItem[];
   bankTransfers: BankTransfer[];
+  invoices: Invoice[];
   branch?: { name: string; branchNum: string };
 }
 
@@ -47,6 +54,8 @@ function DrawerContent() {
   const [notes, setNotes] = useState<string[]>([]);
   const [customFields, setCustomFields] = useState<Record<string, number>>({});
   const [template, setTemplate] = useState<TemplateRow[]>(DEFAULT_TEMPLATE);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [addingBank, setAddingBank] = useState(false);
   const [newBankName, setNewBankName] = useState("");
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -57,10 +66,21 @@ function DrawerContent() {
 
   const fetchDrawer = useCallback(async () => {
     setLoading(true);
-    const [drawerRes, tmplRes] = await Promise.all([
+    const [drawerRes, tmplRes, empRes] = await Promise.all([
       fetch(`/api/drawer?branchId=${branchId}&date=${date}`),
       fetch(`/api/settings?key=drawerTemplate`),
+      fetch(`/api/branches/${branchId}/employees`),
     ]);
+    if (empRes.ok) {
+      const empData: Employee[] = await empRes.json();
+      setEmployees(empData.filter((e: Employee & { isActive?: boolean }) => e.isActive !== false));
+    }
+    if (!drawerRes.ok) {
+      const errData = await drawerRes.json().catch(() => ({ error: "unknown" }));
+      console.error("[fetchDrawer] API error:", drawerRes.status, errData.error);
+      setLoading(false);
+      return;
+    }
     const data = await drawerRes.json();
     const tmplData = tmplRes.ok ? await tmplRes.json() : { value: null };
 
@@ -77,6 +97,13 @@ function DrawerContent() {
     });
     setSoldItems(data.soldItems ?? []);
     setBankTransfers(data.bankTransfers ?? []);
+    setInvoices(
+      (data.invoices ?? []).map((inv: Invoice & { barcodes: string; employeeId?: number | null }) => ({
+        ...inv,
+        employeeId: inv.employeeId ?? null,
+        barcodes: (() => { try { return JSON.parse(inv.barcodes as unknown as string); } catch { return []; } })(),
+      }))
+    );
     try { setFieldNotes(JSON.parse(data.fieldNotes || "{}")); } catch { setFieldNotes({}); }
     setNotes(parseNotes(data.notes));
     try { setCustomFields(JSON.parse(data.customFields || "{}")); } catch { setCustomFields({}); }
@@ -187,10 +214,37 @@ function DrawerContent() {
     }
   };
 
-  const changeDate = (delta: number) => {
-    const d = new Date(date + "T00:00:00"); d.setDate(d.getDate() + delta);
-    setDate(d.toISOString().split("T")[0]);
+  const addInvoice = async (type: "صميت" | "عادية") => {
+    if (!drawer) return;
+    const res = await fetch(`/api/drawer/${drawer.id}/invoices`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type }),
+    });
+    if (res.ok) {
+      const newInv = await res.json();
+      setInvoices((prev) => [...prev, { ...newInv, barcodes: [] }]);
+    }
   };
+
+  const updateInvoice = async (id: number, patch: Partial<Invoice>) => {
+    if (!drawer) return;
+    const body: Record<string, unknown> = { ...patch };
+    if (patch.barcodes !== undefined) body.barcodes = patch.barcodes;
+    if ("employeeId" in patch) body.employeeId = patch.employeeId;
+    await fetch(`/api/drawer/${drawer.id}/invoices/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    setInvoices((prev) => prev.map((inv) => inv.id === id ? { ...inv, ...patch } : inv));
+  };
+
+  const deleteInvoice = async (id: number) => {
+    if (!drawer || !confirm("هل تريد حذف هذه الفاتورة؟")) return;
+    const res = await fetch(`/api/drawer/${drawer.id}/invoices/${id}`, { method: "DELETE" });
+    if (res.ok) setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+  };
+
+  const changeDate = (delta: number) => { setDate(shiftDate(date, delta)); };
 
   const handleLock = async (lock: boolean) => {
     if (!drawer) return;
@@ -216,6 +270,16 @@ function DrawerContent() {
   const canEdit = !readOnly;
 
   const bankTotal = (bankTransfers ?? []).reduce((s, b) => s + b.amount, 0);
+  const invoiceTotal = invoices.reduce((s, inv) => s + inv.price, 0);
+  const invoicesAdiya = invoices.filter((i) => i.type === "عادية");
+  const invoicesSamit = invoices.filter((i) => i.type === "صميت");
+  const invoiceCategoryMap: Record<string, number> = {};
+  for (const inv of invoices) {
+    for (const bc of inv.barcodes) {
+      const cat = detectBarcodeType(bc);
+      if (cat) invoiceCategoryMap[cat] = (invoiceCategoryMap[cat] ?? 0) + 1;
+    }
+  }
   const cashSales = (fields.totalSales ?? 0) - (fields.balanceValue ?? 0);
   const bookBalance = computeBookBalance(fields, bankTransfers, template, customFields);
   const difference = (fields.actualBalance ?? 0) - bookBalance;
@@ -644,6 +708,79 @@ function DrawerContent() {
         </div>
       </div>
 
+      {/* ── INVOICES ──────────────────────────────────────────── */}
+      <div className={CARD}>
+        <div className={CARD_HDR} style={{ background: "linear-gradient(135deg, #f8faff, #f0f4fb)" }}>
+          <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center flex-shrink-0">
+            <Receipt size={15} className="text-slate-400" />
+          </div>
+          <h3 className="font-black text-slate-700 text-sm flex-1">تفاصيل الفواتير</h3>
+          <span className="text-xs font-black text-slate-500 bg-white shadow-sm px-3 py-1 rounded-full">
+            {invoices.length} فاتورة
+          </span>
+          {invoiceTotal > 0 && (
+            <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full">
+              {fmt(invoiceTotal)} ريال
+            </span>
+          )}
+        </div>
+
+        {/* Invoice summary */}
+        {invoices.length > 0 && (
+          <div className="px-4 py-3 border-b border-slate-50 flex flex-wrap gap-2">
+            <span className="text-xs font-bold bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full">
+              عادية: {invoicesAdiya.length} — {fmt(invoicesAdiya.reduce((s, i) => s + i.price, 0))}
+            </span>
+            <span className="text-xs font-bold bg-slate-100 text-slate-600 px-3 py-1.5 rounded-full">
+              صميت: {invoicesSamit.length} — {fmt(invoicesSamit.reduce((s, i) => s + i.price, 0))}
+            </span>
+            {Object.entries(invoiceCategoryMap).map(([cat, count]) => (
+              <span key={cat} className="text-xs font-bold bg-violet-50 text-violet-700 px-2.5 py-1.5 rounded-full">
+                {cat}: {count}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {invoices.length > 0 && (
+          <div className="grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 border-b border-slate-50 gap-2 items-center">
+            <span className="text-xs font-bold text-slate-300">#</span>
+            <span className="text-xs font-bold text-slate-300">النوع</span>
+            <span className="text-xs font-bold text-slate-300">رقم الفاتورة</span>
+            <span className="text-xs font-bold text-slate-300">المبلغ</span>
+            <span className="text-xs font-bold text-slate-300">الموظف / الباركودات</span>
+            <span />
+          </div>
+        )}
+
+        <div>
+          {invoices.map((inv, idx) => (
+            <InvoiceRow key={inv.id} inv={inv} idx={idx} readOnly={!canEdit}
+              employees={employees}
+              onUpdate={(patch) => updateInvoice(inv.id, patch)}
+              onDelete={() => deleteInvoice(inv.id)}
+              fmt={fmt}
+            />
+          ))}
+          {invoices.length === 0 && !canEdit && (
+            <p className="text-sm text-slate-300 text-center py-6">لا توجد فواتير</p>
+          )}
+        </div>
+
+        {canEdit && (
+          <div className="flex gap-2 px-4 py-3 border-t border-dashed border-slate-100">
+            <button onClick={() => addInvoice("عادية")}
+              className="flex items-center gap-1.5 text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-50 px-4 py-2.5 rounded-xl transition font-semibold flex-1 justify-center border border-dashed border-blue-200">
+              <Plus size={12} /> فاتورة عادية
+            </button>
+            <button onClick={() => addInvoice("صميت")}
+              className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl transition font-semibold flex-1 justify-center border border-dashed border-slate-200">
+              <Plus size={12} /> فاتورة صميت
+            </button>
+          </div>
+        )}
+      </div>
+
     </div>{/* end screen layout */}
 
     {/* ════════════════════════════════════════════════════════
@@ -827,6 +964,87 @@ function DrawerContent() {
       )}
     </div>{/* end print layout */}
 
+    {/* ════════════════════════════════════════════════════════
+        INVOICE PRINT PAGE — separate A4 page (page-break)
+    ════════════════════════════════════════════════════════ */}
+    {invoices.length > 0 && (
+      <div className="print-only" style={{ fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", direction: "rtl", pageBreakBefore: "always" }}>
+        {/* Header */}
+        <div style={{ textAlign: "center", borderBottom: "2.5px solid #1e3a5f", paddingBottom: "6px", marginBottom: "8px" }}>
+          <h1 style={{ fontSize: "17px", fontWeight: "900", margin: "0 0 2px 0", color: "#1e3a5f" }}>
+            يومية المضيان للمجوهرات — تفاصيل الفواتير
+          </h1>
+        </div>
+
+        {/* Branch + Date */}
+        <table style={{ marginBottom: "8px" }}>
+          <tbody>
+            <tr>
+              <td style={th({ width: "80px" })}>الفرع</td>
+              <td style={{ ...td(), fontWeight: "800", color: "#1e3a5f", width: "200px" }}>{drawer.branch?.name ?? ""}</td>
+              <td style={th({ width: "60px" })}>التاريخ</td>
+              <td style={{ ...td(), fontWeight: "700" }}>{arabicDate}</td>
+              <td style={th({ width: "80px" })}>عدد الفواتير</td>
+              <td style={{ ...td(), fontWeight: "700" }}>{invoices.length}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Summary row */}
+        <table style={{ marginBottom: "8px" }}>
+          <tbody>
+            <tr>
+              <td style={th({ width: "100px" })}>فواتير عادية</td>
+              <td style={{ ...td(), fontWeight: "700", color: "#1d4ed8", width: "120px" }}>
+                {invoicesAdiya.length} — {fmt(invoicesAdiya.reduce((s, i) => s + i.price, 0))}
+              </td>
+              <td style={th({ width: "90px" })}>فواتير صميت</td>
+              <td style={{ ...td(), fontWeight: "700", color: "#64748b", width: "120px" }}>
+                {invoicesSamit.length} — {fmt(invoicesSamit.reduce((s, i) => s + i.price, 0))}
+              </td>
+              {Object.entries(invoiceCategoryMap).map(([cat, count]) => (
+                <>
+                  <td key={`th-${cat}`} style={th({ width: "60px" })}>{cat}</td>
+                  <td key={`td-${cat}`} style={{ ...td(), fontWeight: "700", width: "50px" }}>{count}</td>
+                </>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Invoice table */}
+        <table>
+          <thead>
+            <tr>
+              <th style={{ ...th({ textAlign: "center" }), width: "24px" }}>#</th>
+              <th style={th()}>النوع</th>
+              <th style={th()}>رقم الفاتورة</th>
+              <th style={{ ...th({ textAlign: "center" }), width: "110px" }}>المبلغ</th>
+              <th style={th()}>الموظف</th>
+              <th style={th()}>الباركودات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.map((inv, idx) => (
+              <tr key={inv.id}>
+                <td style={{ ...td(), textAlign: "center" }}>{idx + 1}</td>
+                <td style={{ ...td(), fontWeight: "700", color: inv.type === "عادية" ? "#1d4ed8" : "#64748b" }}>{inv.type}</td>
+                <td style={td()}>{inv.invoiceNum || "—"}</td>
+                <td style={{ ...td(), textAlign: "center", fontWeight: "700", color: "#059669" }}>{inv.price ? fmt(inv.price) : "—"}</td>
+                <td style={td()}>{inv.employeeName || "—"}</td>
+                <td style={{ ...td(), fontSize: "9px", color: "#64748b" }}>{inv.barcodes.join("، ")}</td>
+              </tr>
+            ))}
+            <tr>
+              <td colSpan={3} style={th({ textAlign: "right" })}>إجمالي الفواتير</td>
+              <td style={{ ...th({ textAlign: "center" }), color: "#059669" }}>{fmt(invoiceTotal)}</td>
+              <td colSpan={2} />
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    )}
+
     </>
   );
 }
@@ -900,6 +1118,163 @@ function CashRow({ sign, label, value, valueClass = "text-slate-600", editable =
           {value !== 0 ? fmt(value) : <span className="text-slate-200 font-normal">—</span>}
         </span>
       )}
+    </div>
+  );
+}
+
+// ── BARCODE TAG INPUT ─────────────────────────────────────────
+function BarcodeTagInput({ barcodes, onChange, readOnly }: {
+  barcodes: string[];
+  onChange: (updated: string[]) => void;
+  readOnly: boolean;
+}) {
+  const [input, setInput] = useState("");
+
+  const addBarcode = () => {
+    const val = input.trim();
+    if (!val) return;
+    onChange([...barcodes, val]);
+    setInput("");
+  };
+
+  const removeBarcode = (idx: number) => {
+    onChange(barcodes.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <div className="flex flex-wrap gap-1 items-center">
+      {barcodes.map((bc, idx) => {
+        const type = detectBarcodeType(bc);
+        return (
+          <span key={idx} className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 text-xs rounded-full px-2 py-0.5">
+            <span className="font-mono">{bc}</span>
+            {type && <span className="text-blue-400 text-[10px]">({type})</span>}
+            {!readOnly && (
+              <button type="button" onClick={() => removeBarcode(idx)} className="text-slate-300 hover:text-red-400 transition leading-none">×</button>
+            )}
+          </span>
+        );
+      })}
+      {!readOnly && (
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addBarcode(); }
+          }}
+          onBlur={addBarcode}
+          placeholder="باركود..."
+          className="text-xs bg-transparent focus:outline-none text-slate-500 placeholder-slate-200 w-24 min-w-0"
+        />
+      )}
+    </div>
+  );
+}
+
+// ── INVOICE ROW ───────────────────────────────────────────────
+function InvoiceRow({ inv, idx, readOnly, onUpdate, onDelete, employees, fmt }: {
+  inv: { id: number; type: "صميت" | "عادية"; invoiceNum: string; price: number; employeeName: string; employeeId: number | null; barcodes: string[] };
+  idx: number; readOnly: boolean;
+  employees: { id: number; name: string }[];
+  onUpdate: (patch: { type?: "صميت" | "عادية"; invoiceNum?: string; price?: number; employeeName?: string; employeeId?: number | null; barcodes?: string[] }) => void;
+  onDelete: () => void;
+  fmt: (n: number) => string;
+}) {
+  const [localPrice, setLocalPrice] = useState(String(inv.price || ""));
+  const [localInvoiceNum, setLocalInvoiceNum] = useState(inv.invoiceNum);
+
+  return (
+    <div className="grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 gap-2 items-start border-b border-slate-50 hover:bg-slate-50/40 transition-colors">
+      {/* # */}
+      <span className="text-xs text-slate-300 font-semibold pt-1.5">{idx + 1}</span>
+
+      {/* النوع */}
+      {readOnly ? (
+        <span className={`text-xs font-black px-2 py-1 rounded-lg text-center ${inv.type === "عادية" ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
+          {inv.type}
+        </span>
+      ) : (
+        <select
+          value={inv.type}
+          onChange={(e) => onUpdate({ type: e.target.value as "صميت" | "عادية" })}
+          className="text-xs font-bold bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-700 cursor-pointer"
+        >
+          <option value="عادية">عادية</option>
+          <option value="صميت">صميت</option>
+        </select>
+      )}
+
+      {/* رقم الفاتورة */}
+      {inv.type === "عادية" ? (
+        readOnly ? (
+          <span className="text-xs text-slate-500 pt-1.5">{inv.invoiceNum || "—"}</span>
+        ) : (
+          <input
+            type="text"
+            value={localInvoiceNum}
+            onChange={(e) => setLocalInvoiceNum(e.target.value)}
+            onBlur={() => { if (localInvoiceNum !== inv.invoiceNum) onUpdate({ invoiceNum: localInvoiceNum }); }}
+            placeholder="رقم الفاتورة"
+            className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full"
+          />
+        )
+      ) : (
+        <span className="text-xs text-slate-200 pt-1.5">—</span>
+      )}
+
+      {/* المبلغ */}
+      {readOnly ? (
+        <span className="text-xs font-black text-emerald-600 pt-1.5">{inv.price ? fmt(inv.price) : "—"}</span>
+      ) : (
+        <input
+          type="number" min="0" step="1"
+          value={localPrice}
+          onChange={(e) => setLocalPrice(e.target.value)}
+          onBlur={() => {
+            const val = parseFloat(localPrice) || 0;
+            if (val !== inv.price) onUpdate({ price: val });
+          }}
+          placeholder="0"
+          className="text-xs font-black text-emerald-600 bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 w-full"
+        />
+      )}
+
+      {/* الموظف + الباركودات */}
+      <div className="flex flex-col gap-1.5 min-w-0">
+        {readOnly ? (
+          <span className="text-xs text-slate-500">{inv.employeeName || "—"}</span>
+        ) : (
+          <select
+            value={inv.employeeId != null ? String(inv.employeeId) : ""}
+            onChange={(e) => {
+              const selectedId = e.target.value ? parseInt(e.target.value) : null;
+              const selectedName = selectedId != null
+                ? (employees.find((em) => em.id === selectedId)?.name ?? "")
+                : "";
+              onUpdate({ employeeId: selectedId, employeeName: selectedName });
+            }}
+            className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full cursor-pointer"
+          >
+            <option value="">بدون اسم</option>
+            {employees.map((em) => (
+              <option key={em.id} value={em.id}>{em.name}</option>
+            ))}
+          </select>
+        )}
+        <BarcodeTagInput
+          barcodes={inv.barcodes}
+          onChange={(updated) => onUpdate({ barcodes: updated })}
+          readOnly={readOnly}
+        />
+      </div>
+
+      {/* حذف */}
+      {!readOnly ? (
+        <button onClick={onDelete} className="text-slate-200 hover:text-red-400 transition p-1 rounded-lg hover:bg-red-50 mt-0.5">
+          <Trash2 size={11} />
+        </button>
+      ) : <span />}
     </div>
   );
 }

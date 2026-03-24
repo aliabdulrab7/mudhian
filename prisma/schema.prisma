@@ -16,6 +16,7 @@ model Branch {
   createdAt DateTime      @default(now())
   users     User[]
   drawers   DailyDrawer[]
+  employees Employee[]
 }
 
 model User {
@@ -73,6 +74,7 @@ model DailyDrawer {
 
   soldItems     SoldItem[]
   bankTransfers BankTransfer[]
+  invoices      Invoice[]
 
   @@unique([branchId, date])
 }
@@ -100,6 +102,32 @@ model AuditLog {
 model AppSetting {
   key   String @id
   value String @default("")
+}
+
+// الفواتير المباعة (يدوي، مرجعية فقط)
+model Invoice {
+  id           Int         @id @default(autoincrement())
+  drawerId     Int
+  drawer       DailyDrawer @relation(fields: [drawerId], references: [id], onDelete: Cascade)
+  type         String      // "صميت" | "عادية"
+  invoiceNum   String      @default("")
+  price        Float       @default(0)
+  employeeName String      @default("")
+  employeeId   Int?
+  employee     Employee?   @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  barcodes     String      @default("[]") // JSON array of barcode strings
+  createdAt    DateTime    @default(now())
+}
+
+// الموظفون
+model Employee {
+  id        Int       @id @default(autoincrement())
+  branchId  Int
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name      String
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  invoices  Invoice[]
 }
 
 // الحوالات البنكية (5 بنوك ثابتة)

@@ -22,34 +22,40 @@ export async function GET(req: NextRequest) {
 
   const start = new Date(date + "T00:00:00.000Z");
 
-  let drawer = await prisma.dailyDrawer.findFirst({
-    where: { branchId, date: start },
-    include: { soldItems: true, bankTransfers: true, branch: true },
-  });
-
-  if (!drawer) {
-    // Get yesterday's book balance
-    const yesterday = new Date(start);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const prevDrawer = await prisma.dailyDrawer.findFirst({
-      where: { branchId, date: yesterday },
+  try {
+    let drawer = await prisma.dailyDrawer.findFirst({
+      where: { branchId, date: start },
+      include: { soldItems: true, bankTransfers: true, branch: true, invoices: { orderBy: { createdAt: "asc" } } },
     });
 
-    drawer = await prisma.dailyDrawer.create({
-      data: {
-        branchId,
-        date: start,
-        yesterdayBalance: prevDrawer?.bookBalance ?? 0,
-        soldItems: {
-          create: SOLD_CATEGORIES.map((category) => ({ category, quantity: 0 })),
+    if (!drawer) {
+      // Get yesterday's book balance
+      const yesterday = new Date(start);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const prevDrawer = await prisma.dailyDrawer.findFirst({
+        where: { branchId, date: yesterday },
+      });
+
+      drawer = await prisma.dailyDrawer.create({
+        data: {
+          branchId,
+          date: start,
+          yesterdayBalance: prevDrawer?.bookBalance ?? 0,
+          soldItems: {
+            create: SOLD_CATEGORIES.map((category) => ({ category, quantity: 0 })),
+          },
+          bankTransfers: {
+            create: BANKS.map((bankName) => ({ bankName, amount: 0, beneficiary: "", notes: "" })),
+          },
         },
-        bankTransfers: {
-          create: BANKS.map((bankName) => ({ bankName, amount: 0, beneficiary: "", notes: "" })),
-        },
-      },
-      include: { soldItems: true, bankTransfers: true, branch: true },
-    });
+        include: { soldItems: true, bankTransfers: true, branch: true, invoices: { orderBy: { createdAt: "asc" } } },
+      });
+    }
+
+    return NextResponse.json(drawer);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[GET /api/drawer]", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  return NextResponse.json(drawer);
 }

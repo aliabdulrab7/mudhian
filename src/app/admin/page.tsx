@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye, LayoutTemplate, GripVertical, X } from "lucide-react";
+import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye, LayoutTemplate, GripVertical, X, Users } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { parseTemplate, DEFAULT_TEMPLATE, type TemplateRow } from "@/lib/drawerTemplate";
 
@@ -14,7 +14,8 @@ interface AuditEntry {
 }
 
 interface Viewer { id: number; username: string; createdAt: string; }
-type Tab = "branches" | "viewers" | "audit" | "template";
+interface Employee { id: number; name: string; isActive: boolean; createdAt: string; }
+type Tab = "branches" | "viewers" | "audit" | "template" | "employees";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("branches");
@@ -50,6 +51,16 @@ export default function AdminPage() {
   const [newRowForm, setNewRowForm] = useState({ label: "", sign: "+" as "+" | "-" });
   const [showNewRow, setShowNewRow] = useState(false);
 
+  // Employees
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [empBranchId, setEmpBranchId] = useState<number | "">("");
+  const [empLoading, setEmpLoading] = useState(false);
+  const [newEmpName, setNewEmpName] = useState("");
+  const [showAddEmp, setShowAddEmp] = useState(false);
+  const [empSaving, setEmpSaving] = useState(false);
+  const [editEmpId, setEditEmpId] = useState<number | null>(null);
+  const [editEmpName, setEditEmpName] = useState("");
+
   const fetchBranches = useCallback(async () => {
     const res = await fetch("/api/branches");
     setBranches(await res.json());
@@ -82,6 +93,14 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchEmployees = useCallback(async (branchId: number) => {
+    setEmpLoading(true);
+    const res = await fetch(`/api/branches/${branchId}/employees`);
+    if (res.ok) setEmployees(await res.json());
+    else setEmployees([]);
+    setEmpLoading(false);
+  }, []);
+
   const saveTemplate = async () => {
     setTemplateSaving(true);
     await fetch("/api/settings", {
@@ -112,6 +131,9 @@ export default function AdminPage() {
   useEffect(() => { if (tab === "viewers") fetchViewers(); }, [tab, fetchViewers]);
   useEffect(() => { if (tab === "audit") fetchAudit(1); }, [tab, fetchAudit]);
   useEffect(() => { if (tab === "template") fetchTemplate(); }, [tab, fetchTemplate]);
+  useEffect(() => {
+    if (tab === "employees" && empBranchId !== "") fetchEmployees(empBranchId as number);
+  }, [tab, empBranchId, fetchEmployees]);
 
   const openAdd = () => { setForm({ name: "", branchNum: "", username: "", password: "", role: "branch" }); setError(""); setShowAdd(true); };
   const openEdit = (branch: Branch) => { setForm({ name: branch.name, branchNum: branch.branchNum, username: branch.users[0]?.username ?? "", password: "", role: "branch" }); setError(""); setEditBranch(branch); };
@@ -146,6 +168,35 @@ export default function AdminPage() {
   };
 
   const handleBackup = () => { window.location.href = "/api/backup"; };
+
+  const handleAddEmployee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmpName.trim() || empBranchId === "") return;
+    setEmpSaving(true);
+    const res = await fetch(`/api/branches/${empBranchId}/employees`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newEmpName.trim() }),
+    });
+    if (res.ok) { setNewEmpName(""); setShowAddEmp(false); fetchEmployees(empBranchId as number); }
+    setEmpSaving(false);
+  };
+
+  const handleToggleEmployee = async (emp: Employee) => {
+    await fetch(`/api/branches/${empBranchId}/employees/${emp.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !emp.isActive }),
+    });
+    if (empBranchId !== "") fetchEmployees(empBranchId as number);
+  };
+
+  const handleRenameEmployee = async (id: number, name: string) => {
+    await fetch(`/api/branches/${empBranchId}/employees/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setEditEmpId(null); setEditEmpName("");
+    if (empBranchId !== "") fetchEmployees(empBranchId as number);
+  };
 
   const handleAddViewer = async (e: React.FormEvent) => {
     e.preventDefault(); setViewerError(""); setSaving(true);
@@ -183,6 +234,12 @@ export default function AdminPage() {
               <Plus size={16} /> مراقب جديد
             </button>
           )}
+          {tab === "employees" && empBranchId !== "" && (
+            <button onClick={() => { setShowAddEmp(true); setNewEmpName(""); }}
+              className="flex items-center gap-2 bg-teal-600 text-white px-4 py-2 rounded-xl hover:bg-teal-700 transition text-sm">
+              <Plus size={16} /> موظف جديد
+            </button>
+          )}
         </div>
       </div>
 
@@ -199,6 +256,9 @@ export default function AdminPage() {
         </button>
         <button onClick={() => setTab("template")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "template" ? "bg-white shadow-sm text-orange-700" : "text-slate-500 hover:text-slate-700"}`}>
           <LayoutTemplate size={14} /> قالب اليومية
+        </button>
+        <button onClick={() => setTab("employees")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "employees" ? "bg-white shadow-sm text-teal-700" : "text-slate-500 hover:text-slate-700"}`}>
+          <Users size={14} /> الموظفون
         </button>
       </div>
 
@@ -421,6 +481,117 @@ export default function AdminPage() {
             <p>• الصفوف المخصصة قابلة للحذف نهائياً من القالب</p>
             <p>• لا تنسَ الضغط على &quot;حفظ القالب&quot; بعد أي تغيير</p>
           </div>
+        </div>
+      )}
+
+      {/* Employees Tab */}
+      {tab === "employees" && (
+        <div className="space-y-4">
+          {/* Branch selector */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex items-center gap-3">
+            <Users size={16} className="text-teal-600 flex-shrink-0" />
+            <label className="text-sm font-semibold text-slate-600 whitespace-nowrap">اختر الفرع:</label>
+            <select
+              value={empBranchId}
+              onChange={(e) => { setEmpBranchId(e.target.value ? parseInt(e.target.value) : ""); setShowAddEmp(false); }}
+              className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+            >
+              <option value="">— اختر فرعاً —</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {empBranchId !== "" && (
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+              {empLoading ? (
+                <div className="text-center py-12 text-slate-400 text-sm animate-pulse">جاري التحميل...</div>
+              ) : (
+                <>
+                  {/* Add employee inline form */}
+                  {showAddEmp && (
+                    <form onSubmit={handleAddEmployee} className="border-b border-teal-100 bg-teal-50 px-4 py-3 flex gap-2 items-center">
+                      <input
+                        type="text" autoFocus value={newEmpName}
+                        onChange={(e) => setNewEmpName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Escape") { setShowAddEmp(false); setNewEmpName(""); } }}
+                        placeholder="اسم الموظف..."
+                        className="flex-1 text-sm border border-teal-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                      />
+                      <button type="submit" disabled={empSaving || !newEmpName.trim()}
+                        className="bg-teal-600 text-white text-sm px-4 py-2 rounded-xl hover:bg-teal-700 transition disabled:opacity-50">
+                        {empSaving ? "..." : "إضافة"}
+                      </button>
+                      <button type="button" onClick={() => { setShowAddEmp(false); setNewEmpName(""); }}
+                        className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100">
+                        <X size={14} />
+                      </button>
+                    </form>
+                  )}
+
+                  {employees.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Users size={36} className="mx-auto mb-3 text-slate-200" />
+                      <p className="text-slate-400 text-sm">لا يوجد موظفون لهذا الفرع بعد</p>
+                      <button onClick={() => setShowAddEmp(true)} className="mt-3 text-teal-600 hover:underline text-sm">أضف أول موظف</button>
+                    </div>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="px-4 py-3 text-right font-semibold text-gray-600">الاسم</th>
+                          <th className="px-4 py-3 text-right font-semibold text-gray-600">الحالة</th>
+                          <th className="px-4 py-3 w-28"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employees.map((emp) => (
+                          <tr key={emp.id} className={`border-t border-gray-100 ${!emp.isActive ? "opacity-50 bg-gray-50" : "hover:bg-gray-50"}`}>
+                            <td className="px-4 py-3">
+                              {editEmpId === emp.id ? (
+                                <div className="flex gap-2">
+                                  <input autoFocus type="text" value={editEmpName}
+                                    onChange={(e) => setEditEmpName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleRenameEmployee(emp.id, editEmpName);
+                                      if (e.key === "Escape") { setEditEmpId(null); setEditEmpName(""); }
+                                    }}
+                                    className="text-sm border border-teal-300 rounded-xl px-2 py-1 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                                  />
+                                  <button onClick={() => handleRenameEmployee(emp.id, editEmpName)}
+                                    className="text-xs bg-teal-600 text-white px-2 py-1 rounded-lg hover:bg-teal-700">حفظ</button>
+                                  <button onClick={() => { setEditEmpId(null); setEditEmpName(""); }}
+                                    className="text-slate-400 hover:text-slate-600 text-xs px-2 py-1 rounded-lg hover:bg-slate-100">إلغاء</button>
+                                </div>
+                              ) : (
+                                <span className="font-medium text-gray-800">{emp.name}</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${emp.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                                {emp.isActive ? "نشط" : "موقوف"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex gap-1 justify-end">
+                                <button onClick={() => { setEditEmpId(emp.id); setEditEmpName(emp.name); }}
+                                  className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"><Pencil size={13} /></button>
+                                <button onClick={() => handleToggleEmployee(emp)}
+                                  className={`p-1.5 rounded-lg transition ${emp.isActive ? "text-red-400 hover:bg-red-50" : "text-emerald-500 hover:bg-emerald-50"}`}>
+                                  {emp.isActive ? <X size={13} /> : <Plus size={13} />}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
 

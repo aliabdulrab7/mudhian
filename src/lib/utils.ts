@@ -16,9 +16,17 @@ export function formatDate(date: Date | string): string {
 
 export function todayISO(): string {
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    .toISOString()
-    .split("T")[0];
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Safe day arithmetic without UTC conversion — always returns local date YYYY-MM-DD
+export function shiftDate(dateStr: string, delta: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const result = new Date(y, m - 1, d + delta);
+  return `${result.getFullYear()}-${String(result.getMonth() + 1).padStart(2, "0")}-${String(result.getDate()).padStart(2, "0")}`;
 }
 
 export function startOfDay(dateStr: string): Date {
