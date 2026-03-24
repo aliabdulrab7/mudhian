@@ -11,7 +11,6 @@ import { useFormatCurrency } from "@/lib/userPrefs";
 import { parseTemplate, parseNotes, DEFAULT_TEMPLATE, type TemplateRow } from "@/lib/drawerTemplate";
 import { detectBarcodeType } from "@/lib/barcodeUtils";
 import { useToast } from "@/components/Toast";
-import BarcodeScanner from "@/components/BarcodeScanner";
 import type { SessionUser } from "@/lib/auth";
 
 interface SoldItem { id: number; category: string; quantity: number }
@@ -62,6 +61,7 @@ function DrawerContent() {
   const [addingBank, setAddingBank] = useState(false);
   const [newBankName, setNewBankName] = useState("");
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState("");
   const [lastScannedInvoiceId, setLastScannedInvoiceId] = useState<number | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1063,9 +1063,51 @@ function DrawerContent() {
     {/* ════════════════════════════════════════════════════════
         INVOICE PRINT PAGE — separate A4 page (page-break)
     ════════════════════════════════════════════════════════ */}
-    {/* ── BARCODE SCANNER MODAL ──────────────────────────────── */}
+    {/* ── BARCODE INPUT MODAL ────────────────────────────────── */}
     {scannerOpen && (
-      <BarcodeScanner onScan={addInvoiceFromScan} onClose={() => setScannerOpen(false)} />
+      <div className="no-print fixed inset-0 z-[9999] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)" }}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Camera size={18} className="text-violet-500" />
+              <span className="font-bold text-slate-700">إدخال باركود</span>
+            </div>
+            <button onClick={() => { setScannerOpen(false); setBarcodeInput(""); }}
+              className="text-slate-300 hover:text-slate-500 transition p-1 rounded-lg hover:bg-slate-100">
+              <X size={18} />
+            </button>
+          </div>
+          <p className="text-xs text-slate-400 mb-3">أدخل رمز الباركود يدوياً (مثال: RNG111، BRL222)</p>
+          <input
+            autoFocus
+            type="text"
+            value={barcodeInput}
+            onChange={(e) => setBarcodeInput(e.target.value.toUpperCase())}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && barcodeInput.trim()) {
+                addInvoiceFromScan(barcodeInput.trim());
+                setBarcodeInput("");
+              }
+            }}
+            placeholder="RNG111"
+            className="w-full text-lg font-mono font-bold text-slate-700 bg-slate-50 border-2 border-slate-200 focus:border-violet-400 rounded-xl px-4 py-3 focus:outline-none text-center tracking-widest mb-4"
+          />
+          <div className="flex flex-wrap gap-2 mb-4">
+            {["RNG", "BRL", "EAR", "NKL", "FSET"].map((prefix) => (
+              <button key={prefix} onClick={() => setBarcodeInput(prefix)}
+                className="text-xs font-bold bg-slate-100 hover:bg-violet-50 hover:text-violet-600 text-slate-500 px-3 py-1.5 rounded-lg transition">
+                {prefix}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => { if (barcodeInput.trim()) { addInvoiceFromScan(barcodeInput.trim()); setBarcodeInput(""); } }}
+            disabled={!barcodeInput.trim()}
+            className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white font-bold py-3 rounded-xl transition text-sm">
+            إضافة فاتورة
+          </button>
+        </div>
+      </div>
     )}
 
     {invoices.length > 0 && (
