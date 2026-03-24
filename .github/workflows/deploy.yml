@@ -26,6 +26,7 @@ jobs:
             cd /var/www/mudhian
 
             echo "📥 Pulling latest code from GitHub..."
+            git checkout -- package-lock.json
             git pull origin main
 
             echo "📦 Installing dependencies..."
