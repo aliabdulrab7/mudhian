@@ -20,9 +20,23 @@ export async function GET(req: NextRequest) {
     include: { bankTransfers: true, branch: true },
   });
 
+  // Latest submitted drawer date per branch (for staleness badge)
+  const latestDrawers = await prisma.dailyDrawer.findMany({
+    where: { branchId: { in: branches.map((b) => b.id) } },
+    orderBy: { date: "desc" },
+    select: { branchId: true, date: true },
+  });
+  const latestByBranch: Record<number, string> = {};
+  for (const d of latestDrawers) {
+    if (!latestByBranch[d.branchId]) {
+      latestByBranch[d.branchId] = d.date.toISOString().slice(0, 10);
+    }
+  }
+
   const result = branches.map((branch) => {
     const drawer = drawers.find((d) => d.branchId === branch.id);
-    if (!drawer) return { branch, hasData: false };
+    const lastSubmittedDate = latestByBranch[branch.id] ?? null;
+    if (!drawer) return { branch, hasData: false, lastSubmittedDate };
 
     const bankTotal = drawer.bankTransfers.reduce((s, b) => s + b.amount, 0);
     const cashSales = drawer.totalSales - drawer.balanceValue;
@@ -39,6 +53,7 @@ export async function GET(req: NextRequest) {
       actualBalance: drawer.actualBalance,
       difference,
       drawerId: drawer.id,
+      lastSubmittedDate,
     };
   });
 

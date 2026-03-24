@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, BarChart3, TrendingUp, Banknote, Wallet, BookOpen, Package, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, BarChart3, TrendingUp, Banknote, Wallet, BookOpen, Package, Users, Download } from "lucide-react";
 import { useFormatCurrency } from "@/lib/userPrefs";
+import { downloadCSV } from "@/lib/utils";
 
 const CATEGORIES = ["طقم", "خاتم", "حلق", "اسوارة", "تعليقة", "نص طقم"];
 const BANKS = ["الانماء", "الراجحي", "الرياض", "ساب", "الاهلي"];
@@ -89,6 +90,31 @@ export default function ReportsPage() {
 
   const topBranch = active.length > 0 ? active.reduce((best, r) => r.totalSales > best.totalSales ? r : best, active[0]) : null;
 
+  const exportSummaryCSV = () => {
+    const rows = (data?.branches ?? []).filter((r) => r.daysCount > 0).map((r) => ({
+      "الفرع": r.branch.name,
+      "الأيام": r.daysCount,
+      "إجمالي المبيعات": r.totalSales,
+      "الحوالات": r.bankTotal,
+      "الكاش": r.cashSales,
+      "رصيد الدرج": r.bookBalance,
+      "الأصناف": r.soldItemsTotal,
+      "متوسط يومي": Math.round(r.avgDailySales),
+    }));
+    downloadCSV(rows, `تقرير-${year}-${MONTHS[month - 1]}.csv`);
+  };
+
+  const exportEmployeesCSV = () => {
+    const rows = empData.map((r) => ({
+      "الموظف": r.employeeName,
+      "عدد الفواتير": r.invoiceCount,
+      "إجمالي المبيعات": r.totalSales,
+      "فواتير عادية": r.byType["عادية"] ?? 0,
+      "فواتير صميت": r.byType["صميت"] ?? 0,
+    }));
+    downloadCSV(rows, `موظفين-${year}-${MONTHS[month - 1]}.csv`);
+  };
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -163,6 +189,15 @@ export default function ReportsPage() {
           {loading ? (
             <div className="text-center py-16 text-slate-400 text-sm animate-pulse">جاري التحميل...</div>
           ) : (
+            <>
+            {active.length > 0 && (
+              <div className="px-5 py-3 border-b border-slate-50 flex justify-end">
+                <button onClick={exportSummaryCSV}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 px-3 py-1.5 rounded-xl transition">
+                  <Download size={13} /> CSV
+                </button>
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-200">
@@ -215,6 +250,7 @@ export default function ReportsPage() {
                 )}
               </table>
             </div>
+            </>
           )}
         </div>
       ))}
@@ -375,6 +411,13 @@ export default function ReportsPage() {
                 <p className="text-slate-400 text-sm">لا توجد فواتير موظفين لهذا الشهر</p>
               </div>
             ) : (
+              <>
+              <div className="px-5 py-3 border-b border-slate-50 flex justify-end">
+                <button onClick={exportEmployeesCSV}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 px-3 py-1.5 rounded-xl transition">
+                  <Download size={13} /> CSV
+                </button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead className="bg-slate-50 border-b border-slate-200">
@@ -435,6 +478,7 @@ export default function ReportsPage() {
                   </tfoot>
                 </table>
               </div>
+              </>
             )}
           </div>
         </div>

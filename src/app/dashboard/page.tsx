@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, TrendingUp, Banknote, Wallet, BookOpen, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, TrendingUp, Banknote, Wallet, BookOpen, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown } from "lucide-react";
 import { todayISO, shiftDate } from "@/lib/utils";
 import { useFormatCurrency } from "@/lib/userPrefs";
 
@@ -10,7 +10,10 @@ interface BranchSummary {
   hasData: boolean;
   totalSales?: number; bankTotal?: number; cashSales?: number;
   bookBalance?: number; actualBalance?: number; difference?: number;
+  lastSubmittedDate?: string | null;
 }
+
+type SortCol = "totalSales" | "bankTotal" | "cashSales" | "bookBalance" | "difference";
 
 const DIFF_ALERT_THRESHOLD = 500;
 const CARD = "bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] overflow-hidden";
@@ -21,6 +24,8 @@ export default function DashboardPage() {
   const [date, setDate] = useState(todayISO());
   const [data, setData] = useState<BranchSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sortCol, setSortCol] = useState<SortCol | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -32,6 +37,22 @@ export default function DashboardPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   const changeDate = (delta: number) => { setDate(shiftDate(date, delta)); };
+
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("desc"); }
+  };
+
+  const today = todayISO();
+  const yesterday = shiftDate(today, -1);
+
+  const stalenessBadge = (lastDate: string | null | undefined) => {
+    if (!lastDate) return <span className="text-xs text-slate-300">—</span>;
+    if (lastDate === today) return <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">اليوم</span>;
+    if (lastDate === yesterday) return <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">أمس</span>;
+    const daysAgo = Math.floor((new Date(today).getTime() - new Date(lastDate).getTime()) / 86400000);
+    return <span className="text-xs font-bold text-red-500 bg-red-50 px-2 py-0.5 rounded-full">متأخر {daysAgo} أيام</span>;
+  };
 
   const active = data.filter((d) => d.hasData);
   const missing = data.filter((d) => !d.hasData);
@@ -47,6 +68,21 @@ export default function DashboardPage() {
   const arabicDate = new Date(date + "T00:00:00").toLocaleDateString("ar-SA-u-nu-latn", {
     year: "numeric", month: "long", day: "numeric",
   });
+
+  const sortedData = sortCol
+    ? [...data].sort((a, b) => {
+        const av = a[sortCol] ?? (a.hasData ? 0 : -Infinity);
+        const bv = b[sortCol] ?? (b.hasData ? 0 : -Infinity);
+        return sortDir === "desc" ? (bv as number) - (av as number) : (av as number) - (bv as number);
+      })
+    : data;
+
+  const SortIcon = ({ col }: { col: SortCol }) => {
+    if (sortCol !== col) return <span className="text-slate-200 ms-1">↕</span>;
+    return sortDir === "desc"
+      ? <ChevronDown size={12} className="inline ms-1 text-blue-500" />
+      : <ChevronUp size={12} className="inline ms-1 text-blue-500" />;
+  };
 
   return (
     <div className="space-y-5">
@@ -132,13 +168,27 @@ export default function DashboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ background: "linear-gradient(135deg, #f8faff, #f0f4fb)" }}>
-                  {["الفرع","إجمالي المبيعات","الحوالات","الكاش","رصيد الدفتري","الرصيد الفعلي","العجز / الزيادة",""].map((h, i) => (
-                    <th key={i} className="px-5 py-4 text-right text-xs font-bold text-slate-400 whitespace-nowrap tracking-wide uppercase">{h}</th>
+                  <th className="px-5 py-4 text-right text-xs font-bold text-slate-400 whitespace-nowrap tracking-wide uppercase">الفرع</th>
+                  {([
+                    ["totalSales", "إجمالي المبيعات"],
+                    ["bankTotal", "الحوالات"],
+                    ["cashSales", "الكاش"],
+                    ["bookBalance", "رصيد الدفتري"],
+                    ["difference", "العجز / الزيادة"],
+                  ] as [SortCol, string][]).map(([col, label]) => (
+                    <th key={col}
+                      className="px-5 py-4 text-right text-xs font-bold text-slate-400 whitespace-nowrap tracking-wide uppercase cursor-pointer hover:text-blue-500 transition select-none"
+                      onClick={() => handleSort(col)}>
+                      {label}<SortIcon col={col} />
+                    </th>
                   ))}
+                  <th className="px-5 py-4 text-right text-xs font-bold text-slate-400 whitespace-nowrap">الرصيد الفعلي</th>
+                  <th className="px-5 py-4 text-right text-xs font-bold text-slate-400 whitespace-nowrap">آخر تسجيل</th>
+                  <th className="px-5 py-4" />
                 </tr>
               </thead>
               <tbody>
-                {data.map((row, idx) => {
+                {sortedData.map((row, idx) => {
                   const bigDiff = Math.abs(row.difference ?? 0) > DIFF_ALERT_THRESHOLD;
                   return (
                     <tr key={row.branch.id} className={`border-t border-slate-50 transition-colors ${
@@ -160,7 +210,6 @@ export default function DashboardPage() {
                           <td className="px-5 py-4 text-blue-500 font-medium">{fmt(row.bankTotal!)}</td>
                           <td className="px-5 py-4 text-slate-500">{fmt(row.cashSales!)}</td>
                           <td className="px-5 py-4 font-bold text-rose-500">{fmt(row.bookBalance!)}</td>
-                          <td className="px-5 py-4 text-slate-600">{fmt(row.actualBalance!)}</td>
                           <td className="px-5 py-4">
                             <span className={`text-xs font-bold px-3 py-1.5 rounded-full ${
                               row.difference === 0 ? "bg-emerald-50 text-emerald-600"
@@ -170,10 +219,12 @@ export default function DashboardPage() {
                               {row.difference === 0 ? "✓ متطابق" : fmt(row.difference!)}
                             </span>
                           </td>
+                          <td className="px-5 py-4 text-slate-600">{fmt(row.actualBalance!)}</td>
                         </>
                       ) : (
                         <td colSpan={6} className="px-5 py-4 text-red-300 text-xs font-medium">لم تُدخل يومية بعد</td>
                       )}
+                      <td className="px-5 py-4">{stalenessBadge(row.lastSubmittedDate)}</td>
                       <td className="px-5 py-4">
                         <button onClick={() => router.push(`/branch/${row.branch.id}/drawer?date=${date}`)}
                           className="text-xs font-bold px-3 py-1.5 rounded-xl transition whitespace-nowrap text-white shadow-sm"
@@ -193,7 +244,7 @@ export default function DashboardPage() {
                     <td className="px-5 py-4 text-blue-500 font-bold text-sm">{fmt(totals.bankTotal)}</td>
                     <td className="px-5 py-4 text-slate-500 font-bold text-sm">{fmt(totals.cashSales)}</td>
                     <td className="px-5 py-4 text-rose-500 font-black text-sm">{fmt(totals.bookBalance)}</td>
-                    <td colSpan={3}></td>
+                    <td colSpan={4}></td>
                   </tr>
                 </tfoot>
               )}

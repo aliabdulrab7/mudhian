@@ -3,6 +3,15 @@ import { useEffect, useState, useCallback } from "react";
 import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye, LayoutTemplate, GripVertical, X, Users } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { parseTemplate, DEFAULT_TEMPLATE, type TemplateRow } from "@/lib/drawerTemplate";
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Branch {
   id: number; name: string; branchNum: string;
@@ -404,31 +413,12 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="divide-y divide-slate-100">
-              {template.map((row) => (
-                <div key={row.key} className={`flex items-center gap-3 px-4 py-3 ${!row.enabled ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"} transition`}>
-                  <GripVertical size={14} className="text-slate-300 shrink-0" />
-                  <span className={`text-xs font-black w-5 text-center shrink-0 ${row.sign === "+" ? "text-blue-500" : "text-rose-400"}`}>
-                    {row.sign === "+" ? "+" : "−"}
-                  </span>
-                  <span className="text-sm text-slate-700 flex-1">{row.label}</span>
-                  {row.custom && (
-                    <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">مخصص</span>
-                  )}
-                  <label className="flex items-center gap-1.5 cursor-pointer">
-                    <input type="checkbox" checked={row.enabled} onChange={() => toggleRow(row.key)}
-                      className="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
-                    <span className="text-xs text-slate-500">{row.enabled ? "مفعّل" : "موقوف"}</span>
-                  </label>
-                  {row.custom && (
-                    <button onClick={() => removeRow(row.key)}
-                      className="text-slate-300 hover:text-red-500 transition p-1">
-                      <X size={14} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+            <TemplateSortableList
+              template={template}
+              setTemplate={setTemplate}
+              toggleRow={toggleRow}
+              removeRow={removeRow}
+            />
 
             {/* Add new custom row */}
             {showNewRow ? (
@@ -683,5 +673,81 @@ function Field({ label, value, onChange, required, type = "text", placeholder }:
         className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
+  );
+}
+
+// ── Sortable Template List ─────────────────────────────────────
+function SortableTemplateRow({ row, toggleRow, removeRow }: {
+  row: TemplateRow;
+  toggleRow: (key: string) => void;
+  removeRow: (key: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.key });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style}
+      className={`flex items-center gap-3 px-4 py-3 border-b border-slate-100 ${!row.enabled ? "opacity-50 bg-slate-50" : "hover:bg-slate-50"} transition`}>
+      <button {...attributes} {...listeners}
+        className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 shrink-0 touch-none">
+        <GripVertical size={14} />
+      </button>
+      <span className={`text-xs font-black w-5 text-center shrink-0 ${row.sign === "+" ? "text-blue-500" : "text-rose-400"}`}>
+        {row.sign === "+" ? "+" : "−"}
+      </span>
+      <span className="text-sm text-slate-700 flex-1">{row.label}</span>
+      {row.custom && (
+        <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-medium">مخصص</span>
+      )}
+      <label className="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" checked={row.enabled} onChange={() => toggleRow(row.key)}
+          className="w-4 h-4 rounded accent-blue-600 cursor-pointer" />
+        <span className="text-xs text-slate-500">{row.enabled ? "مفعّل" : "موقوف"}</span>
+      </label>
+      {row.custom && (
+        <button onClick={() => removeRow(row.key)} className="text-slate-300 hover:text-red-500 transition p-1">
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function TemplateSortableList({ template, setTemplate, toggleRow, removeRow }: {
+  template: TemplateRow[];
+  setTemplate: React.Dispatch<React.SetStateAction<TemplateRow[]>>;
+  toggleRow: (key: string) => void;
+  removeRow: (key: string) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setTemplate((items) => {
+        const oldIndex = items.findIndex((i) => i.key === active.id);
+        const newIndex = items.findIndex((i) => i.key === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={template.map((r) => r.key)} strategy={verticalListSortingStrategy}>
+        <div className="divide-y divide-slate-100">
+          {template.map((row) => (
+            <SortableTemplateRow key={row.key} row={row} toggleRow={toggleRow} removeRow={removeRow} />
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
   );
 }

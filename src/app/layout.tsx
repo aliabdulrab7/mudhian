@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import NavBar from "@/components/NavBar";
 import { UserPrefsProvider } from "@/lib/userPrefs";
+import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "يومية المضيان للمجوهرات",
@@ -13,10 +14,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="ar" dir="rtl" className="h-full">
       <body className="min-h-full flex flex-col font-sans">
         <UserPrefsProvider>
-          <NavBar />
-          <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-5">
-            {children}
-          </main>
+          <ToastProvider>
+            <NavBar />
+            <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-5">
+              {children}
+            </main>
+          </ToastProvider>
         </UserPrefsProvider>
       </body>
     </html>

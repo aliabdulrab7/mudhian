@@ -60,6 +60,7 @@ EOF
 ```
 
 > **مهم:** غيّر `JWT_SECRET` إلى سلسلة عشوائية طويلة. يمكن توليد واحدة هكذا:
+>
 > ```bash
 > node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 > ```
@@ -104,6 +105,7 @@ pm2 save
 ```
 
 أوامر مفيدة:
+
 ```bash
 pm2 status          # حالة التطبيق
 pm2 logs mudhian    # عرض السجلات
@@ -212,9 +214,41 @@ crontab -e
 
 ## استكشاف الأخطاء
 
-| المشكلة | الحل |
-|---------|------|
-| التطبيق لا يستجيب | `pm2 logs mudhian` لعرض الأخطاء |
-| خطأ في قاعدة البيانات | `npx prisma migrate deploy` ثم `pm2 restart mudhian` |
-| تغيير في الكود لا يظهر | `npm run build && pm2 restart mudhian` |
-| منفذ 3000 مشغول | `pm2 delete mudhian && pm2 start npm --name mudhian -- start` |
+| المشكلة                | الحل                                                          |
+| ---------------------- | ------------------------------------------------------------- |
+| التطبيق لا يستجيب      | `pm2 logs mudhian` لعرض الأخطاء                               |
+| خطأ في قاعدة البيانات  | `npx prisma migrate deploy` ثم `pm2 restart mudhian`          |
+| تغيير في الكود لا يظهر | `npm run build && pm2 restart mudhian`                        |
+| منفذ 3000 مشغول        | `pm2 delete mudhian && pm2 start npm --name mudhian -- start` |
+
+النشر اكتمل ✓
+
+الرابط: http://165.227.220.45
+
+بيانات الدخول:
+
+- المستخدم: admin
+- كلمة المرور: admin123 — غيّرها فوراً من الإدارة
+
+ما تم:
+
+1. Ubuntu 22.04 + Node.js 20 + Nginx
+2. رفع المشروع مباشرة للسيرفر
+3. جميع الـ 7 migrations طُبّقت على قاعدة البيانات
+4. بناء production ناجح
+5. PM2 يشغّل التطبيق ويعيد تشغيله تلقائياً عند إعادة تشغيل السيرفر
+6. Nginx يستقبل الطلبات على المنفذ 80
+
+لتحديث التطبيق مستقبلاً:
+
+# على جهازك
+
+tar --exclude='.next' --exclude='node_modules' --exclude='.git' --exclude='prisma/dev.db' -czf /tmp/mudhian.tar.gz .
+scp /tmp/mudhian.tar.gz root@165.227.220.45:/var/www/
+
+# على السيرفر
+
+cd /var/www/mudhian
+tar -xzf /var/www/mudhian.tar.gz
+npm install && npx prisma generate && npx prisma migrate deploy && npm run build
+pm2 restart mudhian

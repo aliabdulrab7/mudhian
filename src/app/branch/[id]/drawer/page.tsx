@@ -4,12 +4,14 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, ChevronRight, Save, Printer, CheckCircle, Lock, LockOpen,
   MessageSquare, X, Plus, Trash2, ShoppingBag, Landmark, Calculator,
-  TrendingUp, Banknote, Wallet, Receipt,
+  TrendingUp, Banknote, Wallet, Receipt, Share2, Camera,
 } from "lucide-react";
 import { todayISO, shiftDate } from "@/lib/utils";
 import { useFormatCurrency } from "@/lib/userPrefs";
 import { parseTemplate, parseNotes, DEFAULT_TEMPLATE, type TemplateRow } from "@/lib/drawerTemplate";
 import { detectBarcodeType } from "@/lib/barcodeUtils";
+import { useToast } from "@/components/Toast";
+import BarcodeScanner from "@/components/BarcodeScanner";
 import type { SessionUser } from "@/lib/auth";
 
 interface SoldItem { id: number; category: string; quantity: number }
@@ -38,6 +40,7 @@ function DrawerContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const fmt = useFormatCurrency();
+  const toast = useToast();
   const branchId = parseInt(params.id as string);
   const [date, setDate] = useState(() => searchParams.get("date") || todayISO());
   const [drawer, setDrawer] = useState<Drawer | null>(null);
@@ -58,6 +61,8 @@ function DrawerContent() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [addingBank, setAddingBank] = useState(false);
   const [newBankName, setNewBankName] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [lastScannedInvoiceId, setLastScannedInvoiceId] = useState<number | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -139,7 +144,7 @@ function DrawerContent() {
     const ff = f ?? fields; const ssi = si ?? soldItems; const bbt = bt ?? bankTransfers;
     const ffn = fn ?? fieldNotes; const nnt = nt ?? notes; const ccf = cf ?? customFields;
     const bookBalance = computeBookBalance(ff, bbt, template, ccf);
-    await fetch(`/api/drawer/${drawer.id}`, {
+    const res = await fetch(`/api/drawer/${drawer.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...ff, bookBalance,
@@ -149,7 +154,9 @@ function DrawerContent() {
         soldItems: ssi, bankTransfers: bbt,
       }),
     });
-    setSaving(false); setSaved(true); setTimeout(() => setSaved(false), 2500);
+    setSaving(false);
+    if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 2500); }
+    else { toast.error("فشل الحفظ، يرجى المحاولة مجدداً"); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawer, fields, soldItems, bankTransfers, fieldNotes, notes, customFields, template]);
 
@@ -214,8 +221,8 @@ function DrawerContent() {
     }
   };
 
-  const addInvoice = async (type: "صميت" | "عادية") => {
-    if (!drawer) return;
+  const addInvoice = async (type: "صميت" | "عادية"): Promise<number | null> => {
+    if (!drawer) return null;
     const res = await fetch(`/api/drawer/${drawer.id}/invoices`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type }),
@@ -223,7 +230,23 @@ function DrawerContent() {
     if (res.ok) {
       const newInv = await res.json();
       setInvoices((prev) => [...prev, { ...newInv, barcodes: [] }]);
+      return newInv.id;
     }
+    return null;
+  };
+
+  const addInvoiceFromScan = async (barcode: string) => {
+    const newId = await addInvoice("صميت");
+    if (newId == null) return;
+    await fetch(`/api/drawer/${drawer!.id}/invoices/${newId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ barcodes: [barcode] }),
+    });
+    setInvoices((prev) => prev.map((inv) => inv.id === newId ? { ...inv, barcodes: [barcode] } : inv));
+    setLastScannedInvoiceId(newId);
+    setTimeout(() => setLastScannedInvoiceId(null), 4000);
+    toast.info("تم إضافة الفاتورة — اختر الموظف");
+    setScannerOpen(false);
   };
 
   const updateInvoice = async (id: number, patch: Partial<Invoice>) => {
@@ -241,10 +264,28 @@ function DrawerContent() {
   const deleteInvoice = async (id: number) => {
     if (!drawer || !confirm("هل تريد حذف هذه الفاتورة؟")) return;
     const res = await fetch(`/api/drawer/${drawer.id}/invoices/${id}`, { method: "DELETE" });
-    if (res.ok) setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+    if (res.ok) {
+      setInvoices((prev) => prev.filter((inv) => inv.id !== id));
+      toast.success("تم حذف الفاتورة");
+    }
   };
 
   const changeDate = (delta: number) => { setDate(shiftDate(date, delta)); };
+
+  const handleShare = async () => {
+    const _cashSales = (fields.totalSales ?? 0) - (fields.balanceValue ?? 0);
+    const _bookBalance = computeBookBalance(fields, bankTransfers, template, customFields);
+    const diff = (fields.actualBalance ?? 0) - _bookBalance;
+    const diffText = diff === 0 ? "✅ متطابق" : diff > 0 ? `زيادة ${fmt(diff)}` : `عجز ${fmt(Math.abs(diff))}`;
+    const _arabicDate = new Date(date + "T00:00:00").toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "long", day: "numeric" });
+    const text = `📊 يومية المضيان للمجوهرات\n${drawer?.branch?.name ?? ""} — ${_arabicDate}\n──────────────────\nإجمالي المبيعات: ${fmt(fields.totalSales ?? 0)} ر.س\nمبيعات كاش: ${fmt(_cashSales)} ر.س\nالرصيد الدفتري: ${fmt(_bookBalance)} ر.س\nالفرق: ${diffText}`;
+    if (navigator.share) {
+      try { await navigator.share({ text }); } catch { /* user cancelled */ }
+    } else {
+      await navigator.clipboard.writeText(text);
+      toast.success("تم نسخ الملخص");
+    }
+  };
 
   const handleLock = async (lock: boolean) => {
     if (!drawer) return;
@@ -360,9 +401,13 @@ function DrawerContent() {
               <LockOpen size={13} /> فتح اليومية
             </button>
           )}
+          <button onClick={handleShare}
+            className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-medium px-3 py-2 rounded-xl transition">
+            <Share2 size={13} /> <span className="hidden sm:inline">مشاركة</span>
+          </button>
           <button onClick={() => window.print()}
             className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 text-xs font-medium px-3 py-2 rounded-xl transition">
-            <Printer size={13} /> طباعة
+            <Printer size={13} /> <span className="hidden sm:inline">طباعة</span>
           </button>
         </div>
       </div>
@@ -388,7 +433,7 @@ function DrawerContent() {
       </div>
 
       {/* ── 3 SALES METRIC CARDS ───────────────────────────────── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
 
         {/* Total Sales */}
         <div className={CARD}>
@@ -465,7 +510,7 @@ function DrawerContent() {
       </div>
 
       {/* ── SOLD ITEMS + BANK TRANSFERS ────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
         {/* Sold Items */}
         <div className={CARD}>
@@ -487,6 +532,15 @@ function DrawerContent() {
                   <input type="number" min="0"
                     value={item.quantity || ""}
                     onChange={(e) => setSoldQty(item.id, parseInt(e.target.value) || 0)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const inputs = document.querySelectorAll<HTMLInputElement>("[data-sold-input]");
+                        const next = inputs[idx + 1];
+                        if (next) next.focus(); else (inputs[0] as HTMLInputElement)?.focus();
+                      }
+                    }}
+                    data-sold-input
                     className="w-20 text-center font-black text-slate-800 bg-slate-100 rounded-xl px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-white transition text-sm border-0"
                     placeholder="0"
                   />
@@ -617,7 +671,7 @@ function DrawerContent() {
       </div>
 
       {/* ── ACTUAL BALANCE + DIFFERENCE ────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Actual Balance */}
         <div className={CARD}>
@@ -743,7 +797,7 @@ function DrawerContent() {
         )}
 
         {invoices.length > 0 && (
-          <div className="grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 border-b border-slate-50 gap-2 items-center">
+          <div className="grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 border-b border-slate-50 gap-2 items-center min-w-[480px]">
             <span className="text-xs font-bold text-slate-300">#</span>
             <span className="text-xs font-bold text-slate-300">النوع</span>
             <span className="text-xs font-bold text-slate-300">رقم الفاتورة</span>
@@ -753,10 +807,11 @@ function DrawerContent() {
           </div>
         )}
 
-        <div>
+        <div className="overflow-x-auto">
           {invoices.map((inv, idx) => (
             <InvoiceRow key={inv.id} inv={inv} idx={idx} readOnly={!canEdit}
               employees={employees}
+              isNew={inv.id === lastScannedInvoiceId}
               onUpdate={(patch) => updateInvoice(inv.id, patch)}
               onDelete={() => deleteInvoice(inv.id)}
               fmt={fmt}
@@ -776,6 +831,10 @@ function DrawerContent() {
             <button onClick={() => addInvoice("صميت")}
               className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50 px-4 py-2.5 rounded-xl transition font-semibold flex-1 justify-center border border-dashed border-slate-200">
               <Plus size={12} /> فاتورة صميت
+            </button>
+            <button onClick={() => setScannerOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-violet-500 hover:text-violet-700 hover:bg-violet-50 px-4 py-2.5 rounded-xl transition font-semibold justify-center border border-dashed border-violet-200">
+              <Camera size={12} /> مسح
             </button>
           </div>
         )}
@@ -967,6 +1026,11 @@ function DrawerContent() {
     {/* ════════════════════════════════════════════════════════
         INVOICE PRINT PAGE — separate A4 page (page-break)
     ════════════════════════════════════════════════════════ */}
+    {/* ── BARCODE SCANNER MODAL ──────────────────────────────── */}
+    {scannerOpen && (
+      <BarcodeScanner onScan={addInvoiceFromScan} onClose={() => setScannerOpen(false)} />
+    )}
+
     {invoices.length > 0 && (
       <div className="print-only" style={{ fontFamily: "'Segoe UI', Tahoma, Arial, sans-serif", direction: "rtl", pageBreakBefore: "always" }}>
         {/* Header */}
@@ -1173,9 +1237,9 @@ function BarcodeTagInput({ barcodes, onChange, readOnly }: {
 }
 
 // ── INVOICE ROW ───────────────────────────────────────────────
-function InvoiceRow({ inv, idx, readOnly, onUpdate, onDelete, employees, fmt }: {
+function InvoiceRow({ inv, idx, readOnly, onUpdate, onDelete, employees, fmt, isNew }: {
   inv: { id: number; type: "صميت" | "عادية"; invoiceNum: string; price: number; employeeName: string; employeeId: number | null; barcodes: string[] };
-  idx: number; readOnly: boolean;
+  idx: number; readOnly: boolean; isNew?: boolean;
   employees: { id: number; name: string }[];
   onUpdate: (patch: { type?: "صميت" | "عادية"; invoiceNum?: string; price?: number; employeeName?: string; employeeId?: number | null; barcodes?: string[] }) => void;
   onDelete: () => void;
@@ -1183,9 +1247,16 @@ function InvoiceRow({ inv, idx, readOnly, onUpdate, onDelete, employees, fmt }: 
 }) {
   const [localPrice, setLocalPrice] = useState(String(inv.price || ""));
   const [localInvoiceNum, setLocalInvoiceNum] = useState(inv.invoiceNum);
+  const empSelectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (isNew && empSelectRef.current) {
+      empSelectRef.current.focus();
+    }
+  }, [isNew]);
 
   return (
-    <div className="grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 gap-2 items-start border-b border-slate-50 hover:bg-slate-50/40 transition-colors">
+    <div className={`grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 gap-2 items-start border-b border-slate-50 hover:bg-slate-50/40 transition-colors min-w-[480px] ${isNew ? "ring-2 ring-blue-400 animate-pulse rounded-xl bg-blue-50/30" : ""}`}>
       {/* # */}
       <span className="text-xs text-slate-300 font-semibold pt-1.5">{idx + 1}</span>
 
@@ -1246,6 +1317,7 @@ function InvoiceRow({ inv, idx, readOnly, onUpdate, onDelete, employees, fmt }: 
           <span className="text-xs text-slate-500">{inv.employeeName || "—"}</span>
         ) : (
           <select
+            ref={empSelectRef}
             value={inv.employeeId != null ? String(inv.employeeId) : ""}
             onChange={(e) => {
               const selectedId = e.target.value ? parseInt(e.target.value) : null;
