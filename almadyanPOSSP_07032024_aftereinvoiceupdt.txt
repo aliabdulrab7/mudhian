@@ -1,0 +1,2023 @@
+/*                   
+
+SELECT mKGVALUECC , NETVALUECC,* FROM RETAIL_SALES_detail where uniqueid=15                   
+
+exec usp_RptRetailSales 15,'''RETAILSALES'''  
+
+EIVOICEQRCODE --MODIFIED BY AMAL/MAHESH--29-02-2024                 
+
+*/                   
+
+CREATE PROCEDURE [dbo].[usp_RptRetailSalesSAM001]                   
+
+@intmidno NUMERIC(18),                   
+
+@strRepName NVARCHAR(100)                   
+
+---with encryption                   
+
+AS                   
+
+DECLARE @strCat NVARCHAR(6)                   
+
+DECLARE @blnL AS bit                   
+
+DECLARE @blnW AS bit                   
+
+DECLARE @blnX AS bit                   
+
+DECLARE @ScrapOutstr NVARCHAR (2048)                   
+
+DECLARE @SReturnstr NVARCHAR (2048)                   
+
+DECLARE @dblSReturnWt NUMERIC (18,3)                   
+
+DECLARE @dblSReturnGrWt NUMERIC (18,3)                   
+
+DECLARE @ScrapPurPureWt NUMERIC(18,3)                   
+
+DECLARE @ScrapPurGrossWt NUMERIC(18,3)                   
+
+DECLARE @rate AS NUMERIC(18,6)                   
+
+DECLARE @rate18K AS NUMERIC(18,6)                   
+
+DECLARE @rate20K AS NUMERIC(18,6)                   
+
+DECLARE @rate21K AS NUMERIC(18,6)                   
+
+DECLARE @rate22K AS NUMERIC(18,6)                   
+
+DECLARE @rate24K AS NUMERIC(18,6)                   
+
+DECLARE @ratetype AS NVARCHAR(6)                   
+
+DECLARE @METAL_RATE2CC AS NUMERIC(18,6)                   
+
+DECLARE @netvaluefc as NUMERIC(18,3)                   
+
+DECLARE @ratesilver AS NUMERIC(18,6)                   
+
+DECLARE @ratetypesilver AS NVARCHAR(6)                   
+
+DECLARE @POSORDERADVVATAMTLC NUMERIC(18,3)                   
+
+DECLARE @POSORDERADVVATAMTFC NUMERIC(18,3)          
+
+declare @receiptotalcc numeric(18,3)                 
+
+declare @refundcc numeric(18,3)                 
+
+SELECT @receiptotalcc=isnull(RECEIPT_TOTALCC,0),@refundcc=ISNULL(REFUNDCC,0) from retail_Sales where mid=@intmidno                   
+
+SELECT @POSORDERADVVATAMTLC=isnull(POSORDERADVVATAMTLC,0),@POSORDERADVVATAMTFC=ISNULL(POSORDERADVVATAMTFC,0) from retail_Sales where mid=@intmidno                   
+
+DECLARE @SchemeSalesFixingPureWt NUMERIC(18,3)                   
+
+SELECT @SchemeSalesFixingPureWt=isnull(SchemeSalesFixingPureWt,0) from retail_Sales where mid=@intmidno                   
+
+DECLARE @TRAYN bit                   
+
+DECLARE @TRANo NVARCHAR(100)                   
+
+DECLARE @PLANETQRURL NVARCHAR(2000) 
+
+DECLARE @DTREMARKS NVARCHAR(2000)                   
+
+select @TRAYN=TRAYN,@TRANo = ISNULL(TRANo,''),@DTREMARKS='',@PLANETQRURL=ISNULL(PLANETQRURL,'') From Retail_Sales                   
+
+Where Mid = @intmidno                   
+
+DECLARE @PURCHASEVOCNO NUMERIC(10)                   
+
+DECLARE @PURCHASEVOCTYPE NVARCHAR(2000)                   
+
+select @PURCHASEVOCNO=PURCHASEVOCNO,@PURCHASEVOCTYPE= ISNULL(PURCHASEVOCTYPE,'') From Retail_Sales                   
+
+Where Mid = @intmidno                   
+
+DECLARE @currentmaxvocno numeric(6)                   
+
+DECLARE @voctype NVARCHAR(4)                   
+
+select @currentmaxvocno = vocno,@voctype=VOCTYPE From Retail_Sales Where Mid = @intmidno                   
+
+DECLARE @Branch_Code AS NVARCHAR(6)                   
+
+SELECT @Branch_Code = ISNULL(Branch_Code,'') FROM Retail_Sales WHERE Mid = @intmidno                   
+
+Declare @vocdate As Datetime                   
+
+Select @vocdate =vocdate from RETAIL_SALES where MID=@intmidno                   
+
+DECLARE @LASTUPDATEDDATE AS datetime                   
+
+select @LASTUPDATEDDATE= max(SYSTEM_DATE ) From BRANCH_KARAT_RATE_DETAIL Where BRANCH_CODE = @Branch_Code and SYSTEM_DATE<@vocdate                   
+
+DECLARE @dblNoOfItems NUMERIC (5,0)                   
+
+SET @dblNoOfItems = (SELECT ITEMS_PER_PAGE FROM ReportSETtings WHERE ReportName = 'RETAILSALES')                   
+
+--- for jawhara JHO001 by sanket on 23-03-2017 total credit card --                   
+
+DECLARE @TOTALRECEIVEDCARD NUMERIC(18,3)                   
+
+SELECT @TOTALRECEIVEDCARD = isnull(sum(AMOUNT_CC),0) FROM retail_sales tr                   
+
+INNER JOIN retail_receipt rr ON rr.VOCTYPE=tr.voctype AND tr.mid=rr.REFMID                   
+
+INNER JOIN CREDITCARD_MASTER cc on cc.CREDIT_CODE = RECEIPT_MODE                   
+
+WHERE MODE=1 AND tr.mid = @intmidno                   
+
+--- for jawhara JHO001 by sanket on 23-03-2017 total advance received--                   
+
+DECLARE @TOTALRECEIVEDADV NUMERIC(18,3)                   
+
+SELECT @TOTALRECEIVEDADV = isnull(sum(AMOUNT_CC),0) FROM retail_sales tr                   
+
+INNER JOIN retail_receipt rr ON rr.VOCTYPE=tr.voctype AND tr.mid=rr.REFMID                   
+
+INNER JOIN CREDITCARD_MASTER cc on cc.CREDIT_CODE = RECEIPT_MODE                   
+
+WHERE MODE=3 AND tr.mid = @intmidno                   
+
+DECLARE @TOTALCASH NUMERIC(18,3)                   
+
+SELECT @TOTALCASH = isnull(sum(AMOUNT_FC),0) FROM retail_sales tr                   
+
+INNER JOIN retail_receipt rr ON rr.VOCTYPE=tr.voctype AND tr.mid=rr.REFMID                   
+
+INNER JOIN CREDITCARD_MASTER cc on cc.CREDIT_CODE = RECEIPT_MODE                   
+
+WHERE MODE=0 AND tr.mid = @intmidno                   
+
+SELECT @rate=RETAIL_SALES_RATETYPE.metal_rate,@ratetype=RETAIL_SALES_RATETYPE.Rate_Type FROM RETAIL_SALES_RATETYPE                   
+
+INNER JOIN retail_sales                   
+
+ON mid = refmid AND retail_sales.voctype=RETAIL_SALES_RATETYPE.voctype                   
+
+WHERE retail_sales.mid=@intmidno                   
+
+AND division_code = 'G'                   
+
+SELECT @ratesilver=RETAIL_SALES_RATETYPE.metal_rate,@ratetypesilver=RETAIL_SALES_RATETYPE.Rate_Type FROM RETAIL_SALES_RATETYPE                   
+
+INNER JOIN retail_sales                   
+
+ON mid = refmid AND retail_sales.voctype=RETAIL_SALES_RATETYPE.voctype                   
+
+WHERE retail_sales.mid=@intmidno                   
+
+AND division_code = 'S'                   
+
+SELECT @rate18K=CASE WHEN MUL_DIV = 'M' THEN                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE / item_curr_rate)                   
+
+else                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE * item_curr_rate)                   
+
+end                   
+
+FROM RETAIL_SALES_KARATRATE                   
+
+INNER JOIN retail_sales                   
+
+ON mid = refmid AND retail_sales.voctype=RETAIL_SALES_KARATRATE.voctype                   
+
+INNER JOIN CURRENCY_MASTER ON item_currency= CURRENCY_CODE                   
+
+WHERE retail_sales.mid=@intmidno                   
+
+AND RETAIL_SALES_KARATRATE.KARAT_CODE='18'                   
+
+SELECT @rate20K=CASE WHEN MUL_DIV = 'M' THEN                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE / item_curr_rate)                   
+
+else                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE * item_curr_rate)                   
+
+end                   
+
+FROM RETAIL_SALES_KARATRATE                   
+
+INNER JOIN retail_sales                   
+
+ON mid = refmid AND retail_sales.voctype=RETAIL_SALES_KARATRATE.voctype                   
+
+INNER JOIN CURRENCY_MASTER ON item_currency= CURRENCY_CODE                   
+
+WHERE retail_sales.mid=@intmidno                   
+
+AND RETAIL_SALES_KARATRATE.KARAT_CODE='20'                   
+
+SELECT @rate21K=CASE WHEN MUL_DIV = 'M' THEN                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE / item_curr_rate)                   
+
+else                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE * item_curr_rate)                   
+
+end                   
+
+FROM RETAIL_SALES_KARATRATE                   
+
+INNER JOIN retail_sales                   
+
+ON mid = refmid AND retail_sales.voctype=RETAIL_SALES_KARATRATE.voctype                   
+
+INNER JOIN CURRENCY_MASTER ON item_currency= CURRENCY_CODE                   
+
+WHERE retail_sales.mid=@intmidno                   
+
+AND RETAIL_SALES_KARATRATE.KARAT_CODE='21'                   
+
+SELECT @rate22K=CASE WHEN MUL_DIV = 'M' THEN                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE / item_curr_rate)                   
+
+else                   
+(RETAIL_SALES_KARATRATE.KARAT_RATE * item_curr_rate)              
+
+end                   
+
+FROM RETAIL_SALES_KARATRATE                   
+
+INNER JOIN retail_sales                   
+
+ON mid = refmid AND retail_sales.voctype=RETAIL_SALES_KARATRATE.voctype                   
+
+INNER JOIN CURRENCY_MASTER ON item_currency= CURRENCY_CODE                   
+
+WHERE retail_sales.mid=@intmidno               
+
+AND RETAIL_SALES_KARATRATE.KARAT_CODE='22'                   
+
+SELECT @rate24K=CASE WHEN MUL_DIV = 'M' THEN                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE / item_curr_rate)                   
+
+else                   
+
+(RETAIL_SALES_KARATRATE.KARAT_RATE * item_curr_rate)                   
+
+end                   
+
+FROM RETAIL_SALES_KARATRATE                   
+
+INNER JOIN retail_sales ON mid = refmid AND retail_sales.voctype=RETAIL_SALES_KARATRATE.voctype                   
+
+INNER JOIN CURRENCY_MASTER ON item_currency= CURRENCY_CODE                   
+
+WHERE retail_sales.mid=@intmidno                   
+
+AND RETAIL_SALES_KARATRATE.KARAT_CODE='24'                   
+
+SELECT @METAL_RATE2CC=CASE WHEN MUL_DIV = 'M' THEN                   
+
+(@rate / CONV_FACTOR) * CURRENCY_RATE                   
+
+else                   
+
+(@rate / CONV_FACTOR) / CURRENCY_RATE                   
+
+end                   
+
+FROM rate_type_master                   
+
+WHERE rate_type = @ratetype                   
+
+DECLARE @GROUPSETREF NUMERIC(1)                   
+
+DECLARE @strCOMPCODE NVARCHAR (10)                   
+
+SELECT @ScrapPurPureWt=ISNULL(SUM(PUREWT),0), @ScrapPurGrossWt = ISNULL(SUM(GROSSWT),0) FROM METAL_PURCHASE_DETAIL WHERE UNIQUEID = (SELECT ISNULL(PURCHASEMID,0) FROM RETAIL_SALES WHERE MID = @intmidno)                   
+
+SELECT @dblSReturnWt=ISNULL(SUM(PUREWT),0), @dblSReturnGrWt = ISNULL(SUM(GROSSWT),0) FROM RETAIL_SRETURN_DETAIL WHERE UNIQUEID = (SELECT ISNULL(SRETURNMID,0) FROM RETAIL_SALES WHERE MID = @intmidno)                   
+
+SELECT @GROUPSETREF = cast(param_value AS NUMERIC) FROM companyparameters WHERE parameter = 'GROUPSETREF'                   
+
+SELECT @strCOMPCODE = PARAM_VALUE FROM COMPANYPARAMETERS WHERE PARAMETER = 'COMPACCODE'                   
+
+CREATE TABLE #tmp_report                   
+
+(                   
+
+blnL BIT,                   
+
+blnW BIT,                   
+
+blnX BIT,                   
+
+srno NUMERIC(6),                   
+
+DIVISIONMS NVARCHAR(1),                   
+
+mid NUMERIC(18),                   
+
+voctype NVARCHAR(3),                   
+
+Branch_Logo NVARCHAR (500),                   
+
+Branch_Code NVARCHAR(6),                   
+
+Branch_Name NVARCHAR(500),                   
+
+Branch_Desc NVARCHAR(500),                   
+
+Picture_Name NVARCHAR(1000),                   
+
+vocno NUMERIC(6),                   
+
+vocdate datetime,                   
+
+System_Date datetime,                   
+
+netvalue_cc NUMERIC(18,3),                   
+
+salesperson_code NVARCHAR(100),                   
+
+salesman_name NVARCHAR(500),                   
+
+stock_code NVARCHAR(100),                   
+
+MainStockCode NVARCHAR(100),                   
+
+Design_Code NVARCHAR(100),                   
+
+description NVARCHAR(1000),                   
+
+Stock_DocDesc NVARCHAR(1000),                   
+
+CurrDesc NVARCHAR (500),                   
+
+Currency_Fraction NVARCHAR (30),                   
+
+Karat_Code NVARCHAR(4),                   
+
+TagLines NVARCHAR(1500),                   
+
+pcs NUMERIC(10),                   
+
+grossqty NUMERIC(18,3),                   
+
+stonewt NUMERIC(18,3),                   
+
+netwt NUMERIC(18,3),                   
+
+WASTE_PER NUMERIC(18,3),                   
+
+Mkg_RateFC NUMERIC(18,3),                 
+
+NetValueFC NUMERIC(18,3),                   
+
+partyname NVARCHAR(500),                   
+
+tel1 NVARCHAR(50),                   
+
+tel2 NVARCHAR(50),                   
+
+remarks NVARCHAR(2500),                   
+
+LocalRemarksNew NVARCHAR(2000),                   
+
+mobile NVARCHAR(50),                   
+pobox NVARCHAR(50),                   
+
+email NVARCHAR(200),                   
+
+item_image IMAGE,             
+
+sreturn_value_cc NUMERIC(18,3),                   
+
+purchase_value_cc NUMERIC(18,3),                   
+
+purchase_value_fc NUMERIC(18,3),                   
+
+subtotal NUMERIC(18,3),                   
+
+nettotal NUMERIC(18,3),                   
+
+discount NUMERIC(18,3),                   
+
+detail_discount NUMERIC(5,3),                   
+
+discountvaluefc NUMERIC(18,3),                   
+
+discountvaluecc NUMERIC(18,3),                   
+
+purchase_purewt NUMERIC (18,3),                   
+
+purchase_grosswt NUMERIC (18,3),                   
+
+metal_rate NUMERIC (18,6),                   
+
+adjust_advance NUMERIC(18,3),                   
+
+LreportFooter NVARCHAR(500),                   
+
+RreportFooter NVARCHAR(500),                   
+
+LRptTitle1 NVARCHAR(150),                   
+
+LRptTitle2 NVARCHAR(150),                   
+
+LRptTitle3 NVARCHAR(150),                   
+
+LRptTitle4 NVARCHAR(150),                   
+
+RRptTitle1 NVARCHAR(150),                   
+
+RRptTitle2 NVARCHAR(150),                   
+
+RRptTitle3 NVARCHAR(150),                   
+
+RRptTitle4 NVARCHAR(150),                   
+
+category_code NVARCHAR(100),                   
+
+BranchAddress NVARCHAR(500),                   
+
+BranchPhone NVARCHAR(100),                   
+
+BranchFax NVARCHAR(100),                   
+
+BranchEmail NVARCHAR(100),                   
+
+TotalDiscAmtCC NUMERIC(18,3),                   
+
+sreturn_value_Fc NUMERIC(18,3),                   
+
+SRETURNVOCTYPE NVARCHAR(6),                   
+
+SRETURNVOCNO NUMERIC(6),                   
+
+brand_code NVARCHAR(100),                   
+
+brand_name NVARCHAR (100),                   
+
+branch_curr NVARCHAR(6),                   
+
+MKGVALUEFC NUMERIC(18,3),                   
+
+MKGVALUECC NUMERIC(18,3),                   
+
+METALRATE24k NUMERIC (18,6),                   
+
+KMETALRate22 NUMERIC(18,6),                   
+
+KMETALRate24 NUMERIC(18,6),                   
+
+TagLinesWOEnter NVARCHAR(2500),                   
+
+KaratDescription NVARCHAR(100),                   
+
+Type_Description NVARCHAR(500),                   
+
+SP_ShortName NVARCHAR (100),                   
+
+BranchPhoneAR NVARCHAR (100),                   
+
+BranchFaxAR NVARCHAR (100),                   
+
+BranchEmailAR NVARCHAR (100),                   
+
+BranchAddAR NVARCHAR (500),                   
+
+ReceiptTotalFC NUMERIC (18,3),                   
+
+WATCH_MODELNAME NVARCHAR(100),                   
+
+WATCH_MODELNO NVARCHAR (100),                   
+
+WATCH_REFNO NVARCHAR (100),                   
+
+Branch_NameAR NVARCHAR (500),                   
+
+Branch_DescAR NVARCHAR (500),                   
+
+DetailDescription NVARCHAR (1000),                   
+
+METAL_RATE_GMSFC NUMERIC(18,6),                   
+
+Division_Code NVARCHAR (1),                   
+
+Type_Code NVARCHAR(100),                   
+
+DELIVERYDATE DATETIME,                   
+
+COLOR NVARCHAR(100),                   
+
+SIZE NVARCHAR (100),                   
+
+SUPPLIER_REF NVARCHAR (500),                   
+
+RS_PICTUREPATH NVARCHAR (500),                   
+
+Tag_Price1 NUMERIC(18,3),                   
+
+SJEW_TagLines NVARCHAR (500),                   
+
+WATCH_SERIALNO NVARCHAR (100),                   
+
+RSCustIDNo NVARCHAR (50),                   
+
+MkgMtlNetRate NUMERIC (18,3),                   
+
+KMETALRate18 NUMERIC(18,6),                   
+
+KMETALRate20 NUMERIC(18,6),                   
+
+KMETALRate21 NUMERIC(18,6),                   
+
+DTSALESPERSON_CODE NVARCHAR (10),                   
+
+poscustcode NVARCHAR (18),                   
+
+Vat_Per NUMERIC(17,0),                   
+
+TotalwithVatFc NUMERIC(18,3),                   
+
+TotalwithVatLc NUMERIC(18,3),                   
+
+Vat_AmountLc NUMERIC(18,3),                   
+
+Vat_AmountFc NUMERIC(18,3),                   
+
+TotalVat_AmountFc NUMERIC(18,3),                   
+
+TotalVat_AmountLc NUMERIC(18,3),                   
+
+LOOSE_TOTALWT NUMERIC(18,3),                   
+
+LOOSE_TOTALAMOUNT NUMERIC(18,3),                   
+
+COLOR_TOTALWT NUMERIC(18,3),                   
+
+COLOR_TOTALAMOUNT NUMERIC(18,3),                   
+
+PEARL_TOTALWT NUMERIC(18,3),                   
+
+PEARL_TOTALAMOUNT NUMERIC(18,3),                   
+
+TDWT NUMERIC(18,3),                   
+
+RD NUMERIC(18,3),                
+
+TB NUMERIC(18,3) ,                   
+
+PR NUMERIC(18,3),                   
+
+MQ NUMERIC(18,3),                   
+
+SO NUMERIC(18,3),                   
+
+OT NUMERIC(18,3),                   
+
+RUBY NUMERIC(18,3),                   
+
+SAPHIRE NUMERIC(18,3),                   
+
+TAG1 NVARCHAR(500),                   
+
+TAG2 NVARCHAR(500),                   
+
+TAG3 NVARCHAR(500) ,                  
+
+TAG4 NVARCHAR(500),                   
+
+TAG5 NVARCHAR(500),                   
+
+STD_LCCOST NUMERIC(18,3),                   
+
+EMERALD NUMERIC(18,3),                   
+
+KARAT_DT NVARCHAR(100),                   
+
+GRWT_DT NUMERIC(18,3),                   
+
+CARAT_DT NUMERIC(18,3),                   
+
+PCS_DT NUMERIC(6,0),                   
+
+COLOR_DT NVARCHAR(200),                   
+
+CLARITY_DT NVARCHAR(200),                   
+
+SIEVE_DT NVARCHAR(200),                   
+
+SIZE_DT NVARCHAR(200),                   
+
+SHAPE_DT NVARCHAR(200),                   
+
+Rlpoint NUMERIC(18,6),                   
+
+Redeem_Wt NUMERIC(18,6) ,                   
+
+Item_cuurency NVARCHAR(50),                   
+
+CustPrefix NVARCHAR(6),                   
+
+custaddress NVARCHAR(500),                   
+
+Cost_Code NVARCHAR (6),                   
+
+Mobcode NVARCHAR(6),                   
+
+D_SIZE NVARCHAR(20),                   
+
+description_AR NVARCHAR(500),                   
+
+CLARITY NVARCHAR(50),                   
+
+SHAPE NVARCHAR(50),                   
+
+CUT NVARCHAR(50),                   
+
+POLISH NVARCHAR(50),                   
+
+SYMMETRY NVARCHAR(50),                   
+
+FlUOR NVARCHAR(50),                   
+
+CIRT_BY NVARCHAR(50),                   
+
+CIRT_NO NVARCHAR(50),                   
+
+CIRT_DATE DATETIME,                   
+
+RS_Fixed NUMERIC(1),                   
+
+WATCH_SETREF NVARCHAR(100),                   
+
+WATCH_TYPE NUMERIC(5),                   
+
+WATCH_MATERIAL NVARCHAR(100),                   
+
+WATCH_MOVEMENT NVARCHAR(100),                   
+
+COMMENTS NVARCHAR(1000),                   
+
+AR_DESCRIPTION NVARCHAR(400),                   
+
+METALVALUE NUMERIC(18,3),                   
+
+SRETURNMID NUMERIC(18),                   
+
+SRGSTValue NUMERIC(18,3),                   
+
+gstvatamountfc NUMERIC(18,3),                   
+
+gstvatamountcc NUMERIC(18,3),                   
+
+STONERATEFC NUMERIC(18,3),                   
+
+STONERATECC NUMERIC(18,3),                   
+
+PURITY NUMERIC(7, 6) ,                   
+
+WayBillNo NVARCHAR(100),                   
+
+WayBillDate datetime,                   
+
+TaxOffice NVARCHAR(100),                   
+
+TaxNo NVARCHAR(100) ,                   
+
+ITEMCURRATE NUMERIC(11,6),                   
+
+PUREWT NUMERIC(18,3),                   
+
+RedemptionTotalValueCC NUMERIC(18,3),                   
+
+IDCATEGORY NVARCHAR(20),                   
+
+LREMARKSNEW NVARCHAR(500),                   
+
+BARCODEREFNUMBER NVARCHAR(10),                   
+
+SET_REF NVARCHAR(100),                   
+
+CITY NVARCHAR(100),                   
+
+WATCH_WEIGHT NVARCHAR(100),                   
+
+STONEVALUECC NUMERIC(18,3),                   
+
+price1perdiamond NVARCHAR(20),                
+
+price1permetal NVARCHAR(20),                   
+
+arabicdesc nvARCHAR(100) default '' ,                   
+
+CreditCardCommCC NUMERIC(18,3),                   
+
+CreditCardCommFC NUMERIC(18,3),                   
+
+Comp1Shape NVARCHAR(10),                   
+
+comp1Pcs NUMERIC (9,3),                   
+
+comp1Crt NUMERIC (9,3),                   
+
+comp1Grwt NUMERIC (9,3),                   
+
+Comp2Shape NVARCHAR(10),                   
+
+comp2Pcs NUMERIC (9,3),                   
+
+comp2Crt NUMERIC (9,3),           
+
+comp2Grwt NUMERIC (9,3),    
+
+Comp3Shape NVARCHAR(10),                   
+
+comp3Pcs NUMERIC (9,3),                   
+
+comp3Crt NUMERIC (9,3),                   
+
+comp3Grwt NUMERIC (9,3),                   
+
+Comp4Shape NVARCHAR(10),                   
+
+comp4Pcs NUMERIC (9,3),                   
+
+comp4Crt NUMERIC (9,3),                   
+
+comp4Grwt NUMERIC (9,3),                   
+
+Comp5Shape NVARCHAR(10),                   
+
+comp5Pcs NUMERIC (9,3),                   
+
+comp5Crt NUMERIC (9,3),                   
+
+comp5Grwt NUMERIC (9,3),                   
+
+METAL_TOTALGROSSWT numeric(14,3),                   
+
+giftitem bit,                   
+
+BRANCHVATNUMBER NVARCHAR(50),                   
+
+nationalitycode NVARCHAR(50),                   
+
+nationalitydesc NVARCHAR(50) ,                   
+
+Tag_Price2 NUMERIC(18,3),                   
+
+BRANCHMANAGER NVARCHAR(50)  ,                
+
+CITYDESCRIPTION NVARCHAR(100) ,              
+
+POS_PICTUREPATH NVARCHAR(500),            
+
+VATAmountFCRoundCC numeric(18,3) ,      
+
+LOOSE_TOTALPCS NUMERIC(18,3),    
+
+QRCODEBLOB IMAGE ,  
+
+QRCODEVALUE NVARCHAR(4000) ,
+
+TYPEVALUE  NVARCHAR(100),
+
+EINVOICEQRIMAGE iMAGE  
+
+)                   
+
+DECLARE @TOTALRECEIVED NUMERIC(18,3) --- for Al Mandoos                   
+
+DECLARE @CHEQUEREMARK NVARCHAR(500) --- for Al Mandoos                   
+
+INSERT INTO #tmp_report                   
+
+(                   
+
+srno,                   
+
+mid,                   
+
+Branch_Logo,                   
+
+Branch_Code,                   
+
+Branch_Name,                   
+
+Branch_Desc,                   
+
+Picture_Name,                   
+
+voctype ,                   
+
+vocno,                   
+
+vocdate,                   
+
+System_Date,                   
+
+netvalue_cc,               
+
+salesperson_code ,                   
+
+salesman_name,                   
+
+stock_code ,                   
+
+MainStockCode,                   
+
+Design_Code,                   
+
+description ,                   
+
+Stock_DocDesc,                   
+
+CurrDesc,                   
+
+Currency_Fraction,                   
+
+Karat_Code,                   
+
+TagLines ,                   
+
+pcs ,                   
+
+grossqty,                   
+
+stonewt,                   
+
+netwt,                   
+
+WASTE_PER,                   
+
+Mkg_RateFC,                   
+
+NetValueFC,                   
+
+partyname,                   
+
+tel1 ,                   
+
+tel2 ,                   
+
+remarks,                   
+
+LocalRemarksNew,                   
+
+mobile ,                   
+
+pobox,                   
+
+email,                   
+
+item_image,                   
+
+sreturn_value_cc,                   
+
+purchase_value_cc,                   
+
+purchase_value_fc,                   
+
+subtotal,                   
+
+nettotal,         
+
+discount,                   
+
+detail_discount,                   
+
+discountvaluefc,                   
+
+discountvaluecc,                   
+
+metal_rate,                   
+
+adjust_advance,                   
+
+LreportFooter,                   
+
+RreportFooter,                   
+
+LRptTitle1,                   
+
+LRptTitle2,                   
+
+LRptTitle3,      
+
+LRptTitle4,                   
+
+RRptTitle1,                   
+
+RRptTitle2,                   
+
+RRptTitle3,                   
+
+RRptTitle4,                   
+
+category_code,                   
+
+BranchAddress,                   
+
+BranchPhone,                   
+
+BranchFax,                   
+
+BranchEmail,                   
+
+TotalDiscAmtCC,                   
+
+sreturn_value_fc,                   
+
+sreturnvoctype,                   
+
+sreturnvocno,                   
+
+brand_code,                   
+
+brand_name,                   
+
+branch_curr,                   
+
+MKGVALUEFC,                   
+
+MKGVALUECC,                   
+
+DIVISIONMS,                   
+
+TagLinesWOEnter,                   
+
+KaratDescription,                   
+
+Type_Description,                   
+
+SP_ShortName,                   
+
+BranchPhoneAR,      
+
+BranchFaxAR,                   
+
+BranchEmailAR,                   
+
+BranchAddAR,                   
+
+ReceiptTotalFC,                   
+
+WATCH_MODELNAME,                   
+
+WATCH_MODELNO,                   
+
+WATCH_REFNO,                   
+
+Branch_NameAR,                   
+
+Branch_DescAR,                   
+
+DetailDescription,                   
+
+METAL_RATE_GMSFC,                   
+
+Division_Code,                   
+
+Type_Code,                   
+
+DELIVERYDATE,                   
+
+RS_PICTUREPATH,                   
+
+SJEW_TagLines,                   
+
+RSCustIDNo,                   
+
+MkgMtlNetRate,                   
+
+DTSALESPERSON_CODE,                   
+
+poscustcode,                   
+
+Vat_Per,                   
+
+TotalwithVatFc,                   
+
+TotalwithVatLc,                   
+
+Vat_AmountLc,                   
+
+Vat_AmountFc,                   
+
+TotalVat_AmountFc,                   
+
+TotalVat_AmountLc,                   
+
+LOOSE_TOTALWT ,                   
+
+LOOSE_TOTALAMOUNT ,                   
+
+COLOR_TOTALWT ,                   
+
+COLOR_TOTALAMOUNT ,                   
+
+PEARL_TOTALWT ,                   
+
+PEARL_TOTALAMOUNT ,                   
+
+TDWT ,                   
+
+RD ,                   
+
+TB ,     
+
+PR ,                   
+
+MQ ,                   
+
+SO ,                   
+
+OT ,                   
+
+RUBY ,                   
+
+SAPHIRE ,                   
+
+TAG1 ,                   
+
+TAG2 ,                   
+
+TAG3 ,                   
+
+TAG4 ,                   
+
+TAG5 ,                   
+
+STD_LCCOST,                   
+
+EMERALD,                   
+
+Rlpoint,                   
+
+Redeem_Wt,                   
+
+Item_cuurency,                   
+
+description_AR,                   
+
+RS_Fixed,                   
+
+METALVALUE,                   
+
+SRETURNMID,                   
+
+gstvatamountfc,                   
+
+gstvatamountcc,                   
+
+STONERATEFC,                   
+
+STONERATECC,                   
+
+PURITY ,                   
+
+WayBillNo,                   
+
+WayBillDate,                   
+
+ITEMCURRATE,                   
+
+PUREWT,                   
+
+RedemptionTotalValueCC,                   
+
+LREMARKSNEW,                   
+
+BARCODEREFNUMBER,                   
+
+SET_REF,                   
+
+CITY,                   
+
+WATCH_WEIGHT,                   
+
+STONEVALUECC,                   
+
+price1perdiamond,                   
+
+price1permetal,                   
+
+CreditCardCommCC ,                   
+
+CreditCardCommFC,                   
+
+METAL_TOTALGROSSWT,                   
+
+giftitem ,BRANCHVATNUMBER,                   
+
+nationalitycode ,                   
+
+nationalitydesc ,              
+
+POS_PICTUREPATH ,            
+
+VATAmountFCRoundCC,      
+
+LOOSE_TOTALPCS ,    
+
+QRCODEBLOB ,
+
+TYPEVALUE,
+
+EINVOICEQRIMAGE 
+
+)                   
+
+SELECT                   
+
+Retail_Sales_detail.srno,                   
+
+Retail_Sales.MID,                   
+
+'', -- Branch_Logo_Path,                   
+
+Retail_Sales.Branch_Code,                   
+
+'', -- Branch_Master.Branch_Name AS Branch_Name,                   
+
+'', -- Branch_Master.Description AS Branch_Desc,                   
+
+'', -- ISNULL(Picture_Name,'') AS Picture_Name,                   
+
+Retail_Sales.voctype,                   
+
+Retail_Sales.vocno,                   
+
+Retail_Sales.vocdate,                   
+
+Retail_Sales.System_Date,                   
+
+Retail_Sales.netvalue_cc,                   
+
+Retail_Sales.salesperson_code,                   
+
+'', -- salesperson_master.description,                   
+
+Retail_Sales_detail.stock_code,                   
+
+Retail_Sales_detail.MainStockCode,                   
+
+'', -- view_metaldiamondstockwithoutcost.Design_Code,                   
+
+'', -- view_metaldiamondstockwithoutcost.description,                   
+
+Retail_Sales_detail.Stock_DocDesc,                   
+
+'', -- Currency_Master.Description AS CurrDesc,                   
+
+'', -- Currency_Master.Currency_Fraction,                   
+
+'', -- view_metaldiamondstockwithoutcost.Karat_Code, 
+
+'', -- view_metaldiamondstockwithoutcost.TagLines,                   
+
+Retail_Sales_detail.pcs,                   
+
+Retail_sales_Detail.GrossWt AS grossqty,                   
+
+Retail_sales_Detail.stonewt,                   
+
+Retail_sales_Detail.NETWT,                   
+
+Retail_sales_Detail.WASTE_PER,                   
+
+Retail_Sales_Detail.Mkg_RateFC,                   
+
+Retail_sales_detail.NetValueFC,                   
+
+Retail_Sales.partyname,                   
+
+Retail_Sales.tel1,                   
+
+Retail_Sales.tel2,                   
+
+Retail_Sales.remarks,                   
+
+RETAIL_SALES.LocalRemarksNew,                   
+
+Retail_Sales.mobile,                   
+
+Retail_Sales.pobox,                   
+
+Retail_Sales.email,                   
+
+'' AS item_image,                   
+
+ISNULL(Retail_Sales.sreturn_value_cc,0),                   
+
+ISNULL(Retail_Sales.purchase_value_cc,0),                   
+
+ISNULL(Retail_Sales.purchase_value_fc,0),                  
+
+Retail_Sales.subtotal,                   
+
+Retail_Sales.nettotal,--Retail_Sales.nettotal,                   
+
+Retail_Sales.discount,                   
+
+Retail_Sales_detail.discount,                   
+
+ISNULL(Retail_Sales_detail.discountvaluefc,0),                   
+
+ISNULL(Retail_Sales_detail.discountvaluecc,0),                   
+
+(ISNULL(Retail_Sales_detail.metalvaluefc,0) + ISNULL(Retail_Sales_detail.mkgvaluefc,0)) / ISNULL(Retail_sales_Detail.GrossWt,0),                   
+
+Retail_Sales.adjust_advance,                   
+
+LreportFooter='',                   
+
+RreportFooter='',                   
+
+LRptTitle1='',                   
+
+LRptTitle2='',                   
+
+LRptTitle3='',                   
+
+LRptTitle4='',                   
+
+RRptTitle1='',                   
+
+RRptTitle2='',                   
+
+RRptTitle3='',                   
+
+RRptTitle4='',                   
+
+'', -- view_metaldiamondstockwithoutcost.category_code,                   
+
+'', -- Branch_Master.Address,                   
+
+'', -- Branch_Master.Phone,                   
+
+'', -- Branch_Master.Fax,                   
+
+'', -- Branch_Master.Email,                   
+
+Retail_Sales.Total_DiscValue_fc,                   
+
+ISNULL(sreturn_value_fc,0),                   
+
+sreturnvoctype,                   
+
+sreturnvocno,                   
+
+'', -- view_metaldiamondstockwithoutcost.brand_code,                   
+
+'', -- viewbrandmaster.description,                   
+
+retail_sales.item_currency,                   
+
+Retail_Sales_detail.MKGVALUEFC,                   
+
+Retail_Sales_detail.MKGVALUECC,                   
+
+'', -- DIVISIONMS,              
+
+'', -- Tag_LinesWOEnter,                   
+
+'', -- Karat_Desc,                   
+
+'', -- viewtypemaster.description,                   
+
+'', -- SP_ShortName,                  
+
+'', -- Branch_Master.Phone_Other,                   
+
+'', -- Branch_Master.Fax_Other,            
+
+'', -- Branch_Master.Email_Other,                   
+
+'', -- Branch_Master.Address_Other,                   
+
+Receipt_Total,                   
+
+'', -- ISNULL(view_metaldiamondstockwithoutcost.WATCH_MODELNAME,'') AS WATCH_MODELNAME,                   
+
+'', -- ISNULL(view_metaldiamondstockwithoutcost.WATCH_MODELNO,'') AS WATCH_MODELNO,                   
+
+'', -- ISNULL(view_metaldiamondstockwithoutcost.WATCH_REFNO,'') AS WATCH_REFNO,                   
+
+'', -- Branch_Master.Branch_Name_Other,                   
+
+'', -- Branch_Master.Description_Other,                   
+
+'', -- view_metaldiamondstockwithoutcost.DetailDescription,                   
+
+Retail_Sales_detail.METAL_RATE_GMSFC,                   
+
+Retail_Sales_detail.Division_Code,                   
+
+'',                   
+
+Retail_Sales.DELIVERYDATE,                   
+
+Retail_Sales_detail.RS_PICTUREPATH,                   
+
+SJEW_TagLines,                   
+
+RSCustIDNo,                   
+
+RETAIL_SALES_DETAIL.MkgMtlNetRate,                   
+
+RETAIL_SALES_DETAIL.DTSALESPERSON_CODE,                   
+
+Retail_Sales.poscustcode,                   
+
+ISNULL(Retail_Sales_detail.VAT_PER,0),                   
+
+ISNULL(Retail_Sales_detail.TOTALWITHVATFC,0),                   
+
+ISNULL(Retail_Sales_detail.TOTALWITHVATLC,0),                   
+
+ISNULL(Retail_Sales_detail.VAT_AMOUNTLC,0),                   
+
+ISNULL(Retail_Sales_detail.VAT_AMOUNTFC,0),                   
+
+ISNULL(Retail_Sales.TOTALVAT_AMOUNTFC,0),                   
+
+ISNULL(Retail_Sales.TOTALVAT_AMOUNTLC,0),                   
+
+ISNULL(dsm.LOOSE_TOTALWT ,0),                   
+
+ISNULL(dsm.loose_totalamount,0),                   
+
+ISNULL(dsm.color_totalwt,0),                   
+
+ISNULL(dsm.color_totalamount,0),                   
+
+ISNULL(dsm.PEARL_TOTALWT ,0),                   
+
+ISNULL(dsm.PEARL_TOTALAMOUNT ,0),                   
+
+ISNULL(dsm.TDWT ,0),                   
+
+ISNULL(dsm.RD,0),                   
+
+ISNULL(dsm.TB,0),                   
+
+ISNULL(dsm.PR,0),                   
+
+ISNULL(dsm.MQ,0),                   
+
+ISNULL(dsm.SO,0),                   
+
+ISNULL(dsm.OT,0),                   
+
+ISNULL(dsm.RUBY,0),                   
+
+ISNULL(dsm.SAPHIRE,0),                   
+
+ISNULL(dsm.TAG1,''),                   
+
+ISNULL(dsm.TAG2,''),                   
+
+ISNULL(dsm.TAG3 ,''),                   
+
+ISNULL(dsm.TAG4,''),                   
+
+ISNULL(dsm.TAG5,''),                   
+
+ISNULL(dsm.STD_LCCOST,0),                   
+
+ISNULL(dsm.EMERALD,0),                   
+
+loyalty_trans.Loyalty_Wt,                   
+
+loyalty_trans.Redeem_Wt,                   
+
+retail_sales.Item_currency,    
+
+dsm.STOCK_DESCRIPTION_OTHERS,                   
+
+Retail_Sales.RS_Fixed,                   
+
+RETAIL_SALES_DETAIL.METALVALUEFC ,                   
+
+SRETURNMID,                   
+
+gstvatamountfc,                   
+
+gstvatamountcc,                   
+
+Retail_Sales_detail.STONE_RATEFC,                   
+
+Retail_Sales_detail.STONE_RATECC,                   
+
+Retail_Sales_detail.PURITY,                   
+
+WAYBILLNO,                   
+
+WAYBILLDATE,                   
+
+Retail_Sales.item_curr_rate,                   
+
+PUREWT,                   
+
+RedemptionTotalValueCC,                   
+
+RemarksNew,                   
+
+RETAIL_SALES.VOCNO,                   
+
+'',                   
+
+'' ,                   
+
+'' ,                   
+
+Retail_Sales_detail.STONEVALUECC,                   
+
+'',                   
+
+'',                   
+
+Retail_Sales.CCSALESCOMMISIONAmountCC,                   
+
+Retail_Sales.CCSALESCOMMISIONAmountFC,                   
+
+METAL_TOTALGROSSWT,                   
+
+isnull( Retail_Sales_detail.GIFT_ITEM,0),'',                   
+
+isnull( Retail_Sales.NATIONALITY,'') ,'' ,'',            
+
+VATAmountFCRoundCC , 0,RETAIL_SALES.QRCODEIMAGE  ,
+
+RETAIL_SALES.TYPE,
+
+ RETAIL_SALES.EINVOICEQRIMAGE 
+
+FROM Retail_Sales                   
+
+INNER JOIN Retail_Sales_detail ON Retail_Sales_detail.uniqueid = Retail_Sales.mid                   
+
+LEFT OUTER JOIN diamond_stock_master dsm ON dsm.stock_code=Retail_Sales_detail.stock_code                   
+
+left join loyalty_trans ON loyalty_trans.refmid = Retail_Sales.mid                   
+
+--INNER JOIN DIAMOND_STNMTL_DETAIL dsD ON dsD.UNIQUEID=DSM.MID                   
+
+WHERE Retail_Sales.mid = @intmidno                   
+
+----- Filling DIAMOND_STNMTL_DETAIL Details                   
+
+--SELECT DISTINCT DSD.UNIQUEID ,DSD.KARAT, DSD.GROSS_WT , DSD.CARAT , DSD.PCS , DSD.COLOR , DSD.CLARITY , DSD.SIEVE , DSD.DSIZE , DSD.SHAPE , DSD.METALSTONE FROM DIAMOND_STNMTL_DETAIL DSD                   
+
+-- INNER JOIN diamond_stock_master dsm ON UNIQUEID=DSM.MID                   
+
+-- INNER JOIN #tmp_report ON dsm.stock_code=#tmp_report.stock_code                   
+
+UPDATE #tmp_report SET KARAT_DT=DSD.KARAT, GRWT_DT=DSD.GROSS_WT                   
+
+FROM DIAMOND_STNMTL_DETAIL DSD                   
+
+INNER JOIN diamond_stock_master dsm ON UNIQUEID=DSM.MID                   
+
+INNER JOIN #tmp_report ON dsm.stock_code=#tmp_report.stock_code                   
+
+WHERE METALSTONE='M'                   
+
+UPDATE #tmp_report SET CARAT_DT=DSD.CARAT , PCS_DT=DSD.PCS , COLOR_DT=DSD.COLOR ,                   
+
+CLARITY_DT=DSD.CLARITY ,SIEVE_DT= DSD.SIEVE , SIZE_DT=DSD.DSIZE ,SHAPE_DT= DSD.SHAPE                   
+
+FROM DIAMOND_STNMTL_DETAIL DSD                   
+
+INNER JOIN diamond_stock_master dsm ON UNIQUEID=DSM.MID                   
+
+INNER JOIN #tmp_report ON dsm.stock_code=#tmp_report.stock_code                   
+
+WHERE METALSTONE='S'                   
+
+----- Filling Branch Details                   
+
+UPDATE #tmp_report SET Branch_Logo=B.Branch_Logo_Path, Branch_Name=B.Branch_Name, Branch_Desc=B.Description, BranchAddress=replace(B.Address,CHAR(13) + char(10),' '),                   
+
+BranchPhone=B.Phone, BranchFax=B.Fax, BranchEmail=B.Email, BranchPhoneAR=B.Phone_Other, BranchFaxAR=B.Fax_Other,                   
+
+BranchEmailAR=B.Email_Other, BranchAddAR=B.Address_Other, Branch_NameAR=B.Branch_Name_Other, Branch_DescAR=B.Description_Other,                   
+
+BRANCHVATNUMBER=ISNULL(VATNUMBER,'') , BRANCHMANAGER = CONTACT_PERSON                   
+
+FROM Branch_Master B WHERE B.Branch_Code = @Branch_Code                   
+
+----- Filling Salesman Details                   
+
+UPDATE #tmp_report SET salesman_name = ISNULL(B.Description,''), SP_ShortName = ISNULL(B.SP_ShortName,'')                   
+
+FROM Salesperson_Master B WHERE ISNULL(B.Salesperson_Code,'') = (SELECT TOP 1 ISNULL(Salesperson_Code,'') FROM #tmp_report)                 
+
+----- Filling Currency Details                   
+
+UPDATE #tmp_report SET CurrDesc=ISNULL(B.Description,''), Currency_Fraction=ISNULL(B.Currency_Fraction,'')                   
+
+FROM Currency_Master B WHERE ISNULL(B.CURRENCY_CODE,'') = (SELECT TOP 1 ISNULL(branch_curr,'') FROM #tmp_report)                   
+
+----- Filling Divisions                   
+
+UPDATE #tmp_report SET DIVISIONMS = D.Division FROM Division_Master D                   
+
+INNER JOIN #tmp_report ON D.Division_Code = #tmp_report.Division_Code                   
+
+----- Filling Metal Stock Master Details                   
+
+UPDATE #tmp_report SET Karat_Code = M.Karat_Code, description = M.Description, category_code = M.Category_Code,                   
+
+brand_code = M.Brand_Code,                   
+
+Type_Code = M.Type_Code         
+
+FROM Metal_Stock_Master M INNER JOIN #tmp_report ON M.Stock_Code = #tmp_report.Stock_Code WHERE DivisionMS='M'                   
+
+----- Filling Metal Stock Master Details Details                   
+
+UPDATE #tmp_report SET Karat_Code = M.Karat_Code, description = M.Description, category_code = M.Category_Code, brand_code = M.Brand_Code,                
+
+Type_Code = M.Type_Code,D_SIZE = D.D_SIZE, SUPPLIER_REF=ISNULL(D.SUPPLIER_REF,'')                   
+
+FROM Metal_Stock_Master M INNER JOIN Metal_Stock_Master_Details D ON D.Main_Stock_Code = M.Stock_Code                   
+
+INNER JOIN #tmp_report ON D.Sub_Stock_Code = #tmp_report.Stock_Code WHERE DivisionMS='M'                   
+
+UPDATE #tmp_report SET price1perdiamond=B.Price1Per FROM Diamond_Stock_Master B                   
+
+INNER JOIN #tmp_report t ON t.stock_code = B.Stock_Code                   
+
+UPDATE #tmp_report SET price1permetal=MSD.TAGLINE1 FROM METAL_STOCK_MASTER_DETAILS MSD                   
+
+INNER JOIN #tmp_report t ON t.stock_code = MSD.SUB_STOCK_CODE                   
+
+----- Filling Diamond Stock Master Details                   
+
+UPDATE #tmp_report SET TagLines=ISNULL(B.Tag_Lines,''), Design_Code=ISNULL(B.Design_Code,''), description=ISNULL(B.Stock_Description,''),                   
+
+Picture_Name=ISNULL(B.Picture_Name,''), category_code=ISNULL(B.Category_Code,''), brand_code=ISNULL(B.Brand_Code,''),                   
+
+TagLinesWOEnter=ISNULL(B.Tag_LinesWOEnter,''), WATCH_MODELNAME=ISNULL(B.WATCH_MODELNAME,''),                   
+
+WATCH_MODELNO=ISNULL(B.WATCH_MODELNO,''), WATCH_REFNO=ISNULL(B.WATCH_REFNO,''),                   
+
+DetailDescription=ISNULL(B.DetailDescription,''),Type_Code = B.Type_Code,                   
+
+Color = ISNULL(B.Color,''),CLARITY=ISNULL(B.clarity,''),SHAPE=ISNULL(B.shape,''),                   
+
+POLISH=ISNULL(B.polish,''),CUT=ISNULL(B.cut,''),SYMMETRY=ISNULL(B.symmetry,''),                   
+
+FlUOR=ISNULL(B.Fluor,''), CIRT_BY =ISNULL(B.Cert_By ,''),CIRT_NO =ISNULL(B.Cert_No ,''),CIRT_DATE=ISNULL(B.Cert_Date ,''),                   
+
+Size = ISNULL(B.Size,''), Supplier_Ref = ISNULL(B.Supplier_Ref,''),                   
+
+WATCH_SERIALNO = B.WATCH_SERIALNO, Cost_Code = B.Cost_Code,                   
+
+WATCH_SETREF=ISNULL(B.SET_REF,''), WATCH_TYPE =ISNULL(B.Watch_Type,0),                   
+
+WATCH_MATERIAL =ISNULL(B.WATCH_MATERIAL,''),WATCH_MOVEMENT =ISNULL(B.WATCH_MOVEMENT,''),COMMENTS =ISNULL(B.COMMENTS,'') ,                   
+
+SET_REF=ISNULL(B.Set_Ref,''),WATCH_WEIGHT=ISNULL(B.WATCH_WEIGHT,''),LOOSE_TOTALPCS=ISNULL(b.LOOSE_TOTALPCS,0)                   
+
+FROM Diamond_Stock_Master B                   
+
+INNER JOIN #tmp_report ON B.Stock_Code = #tmp_report.Stock_Code WHERE DivisionMS='S'                   
+
+----- Filling Brand Master Details                   
+
+UPDATE #tmp_report SET brand_name = B.description FROM viewbrandmaster B                   
+
+INNER JOIN #tmp_report ON B.Code = #tmp_report.brand_code                   
+
+UPDATE #tmp_report SET NATIONALITYDESC = B.description FROM ViewCOUNTRYMASTER B                   
+
+INNER JOIN #tmp_report ON B.Code = #tmp_report.NATIONALITYCODE                   
+
+--UPDATE #tmp_report SET brand_name = B.description FROM viewbrandmaster B                
+
+--INNER JOIN #tmp_report ON B.Code = #tmp_report.brand_code                   
+
+----- Filling Type Master Details                   
+
+UPDATE #tmp_report SET Type_Description = B.description FROM viewtypemaster B                   
+
+INNER JOIN #tmp_report ON B.Code = #tmp_report.Type_Code                   
+
+----- Filling Karat Master Details                   
+
+UPDATE #tmp_report SET KaratDescription = B.Karat_Desc FROM Karat_Master B                   
+
+INNER JOIN #tmp_report ON B.Karat_Code = #tmp_report.Karat_Code                   
+
+--- CITY CODE                   
+
+UPDATE #tmp_report SET CITY=P.CITY FROM POS_CUSTOMER_MASTER P                   
+
+INNER JOIN #tmp_report t ON t.poscustcode = p.CODE                   
+
+UPDATE #tmp_report SET CITYDESCRIPTION=ISNULL(GM.DESCRIPTION,'') FROM #tmp_report P                   
+
+INNER JOIN GENERAL_MASTER GM ON GM.code = p.CITY                
+
+WHERE GM.TYPES='CITY MASTER'                   
+
+declare @poscustidno NVARCHAR(100)                   
+
+----- Filling Customer Prefix                   
+
+UPDATE #tmp_report SET CustPrefix =                   
+
+CASE isnull(POSCustPrefix,0)                   
+
+WHEN 0 THEN ''                   
+
+WHEN 1 THEN 'Mr.'                   
+
+WHEN 2 THEN 'Mrs.'                   
+
+WHEN 3 THEN 'Ms.'                   
+
+END,custaddress=B.ADDRESS,TaxOffice=b.COMPANY,TaxNo=b.TAXOFFICENO,IDCATEGORY=B.IDCATEGORY,Mobcode=B.MobileCode1,@poscustidno=isnull(POSCustIDNo,'')  ,POS_PICTUREPATH =ISNULL(B.PICTURE_NAME,'')              
+
+FROM pos_customer_master B                   
+
+INNER JOIN #tmp_report ON B.Code = #tmp_report.poscustcode               
+
+UPDATE #tmp_report SET Metal_Rate = 0 WHERE DivisionMS = 'S'                   
+
+UPDATE #tmp_report SET METALRATE24k = @METAL_RATE2CC, KMETALRate22=@rate22K, KMETALRate24=@rate24K, KMETALRate21 = @rate21K,                   
+
+KMETALRate20 = @rate20K, KMETALRate18 = @rate18K,                   
+
+purchase_purewt = @ScrapPurPureWt, purchase_grosswt = @ScrapPurGrossWt                   
+
+---Arabic Description-----                   
+
+UPDATE #tmp_report SET ARABICDesc = G1.DESCRIPTION_other FROM #tmp_report                   
+
+INNER JOIN DIAMOND_STOCK_MASTER MSM ON #tmp_report.stock_code = MSM.STOCK_CODE                   
+
+INNER JOIN GENERAL_MASTER G1 ON G1.CODE = msm.TYPE_CODE                   
+
+WHERE g1.types = 'TYPE MASTER'                   
+
+--UPDATE #tmp_report SET ARABICDesc = g1.DESCRIPTION_other + ' ' + g2.DESCRIPTION_other FROM #tmp_report INNER JOIN                   
+
+--DIAMOND_STOCK_MASTER MSM ON MainStockCode = MSM.STOCK_CODE                   
+
+--INNER JOIN GENERAL_MASTER g1 ON g1.CODE = msm.type_code                   
+
+--inner join GENERAL_MASTER g2 on g2.code=msm.brand_code                   
+
+-- where g1.types = 'type master' and g2.TYPES='brand master'                   
+
+if @dblNoOfItems > 0                   
+
+BEGIN                   
+
+DECLARE @RecCount NUMERIC(5)                   
+
+DECLARE @Rec20Count INTEGER                   
+
+DECLARE @EmptyRecInsert NUMERIC(5)                   
+
+DECLARE @TmpEmptyRecInsert NUMERIC(5)                   
+
+SELECT @RecCount = COUNT(*) FROM #tmp_report                   
+
+SET @Rec20Count = @RecCount / @dblNoOfItems                   
+
+if @RecCount <> @dblNoOfItems                   
+
+BEGIN                   
+
+SET @EmptyRecInsert = @dblNoOfItems - (@RecCount - @Rec20Count * @dblNoOfItems)                   
+
+SET @TmpEmptyRecInsert = 0                   
+
+WHILE @TmpEmptyRecInsert < @EmptyRecInsert                   
+
+BEGIN                   
+
+SET @TmpEmptyRecInsert = @TmpEmptyRecInsert + 1                   
+
+Insert into #tmp_report (Branch_Code, TagLines, SrNo) Values ('', '', 99999)                   
+
+END                   
+
+UPDATE #tmp_report SET sreturn_value_cc = (SELECT TOP 1 sreturn_value_cc FROM #tmp_report) WHERE sreturn_value_cc is null                   
+
+UPDATE #tmp_report SET Purchase_Value_cc = (SELECT TOP 1 Purchase_Value_cc FROM #tmp_report) WHERE Purchase_Value_cc is null                   
+
+UPDATE #tmp_report SET sreturn_value_fc = (SELECT TOP 1 sreturn_value_fc FROM #tmp_report) WHERE sreturn_value_fc is null                   
+
+UPDATE #tmp_report SET Purchase_Value_fc = (SELECT TOP 1 Purchase_Value_fc FROM #tmp_report) WHERE Purchase_Value_fc is null                   
+
+UPDATE #tmp_report SET adjust_advance = (SELECT TOP 1 adjust_advance FROM #tmp_report) WHERE adjust_advance is null                   
+
+UPDATE #tmp_report SET subtotal = (SELECT TOP 1 subtotal FROM #tmp_report) WHERE subtotal is null                   
+
+UPDATE #tmp_report SET discount = (SELECT TOP 1 discount FROM #tmp_report) WHERE discount is null                   
+
+UPDATE #tmp_report SET nettotal = (SELECT TOP 1 nettotal FROM #tmp_report) WHERE nettotal is null                   
+
+UPDATE #tmp_report SET mid = (SELECT TOP 1 mid FROM #tmp_report) WHERE mid is null                   
+
+UPDATE #tmp_report SET voctype = (SELECT TOP 1 voctype FROM #tmp_report) WHERE voctype is null                   
+
+UPDATE #tmp_report SET remarks = (SELECT TOP 1 remarks FROM #tmp_report) WHERE remarks is null                   
+
+UPDATE #tmp_report SET partyname = (SELECT TOP 1 partyname FROM #tmp_report) WHERE partyname is null                   
+
+UPDATE #tmp_report SET Branch_Name = (SELECT TOP 1 Branch_Name FROM #tmp_report) WHERE Branch_Name is null                   
+
+UPDATE #tmp_report SET Branch_Desc = (SELECT TOP 1 Branch_Desc FROM #tmp_report) WHERE Branch_Desc is null                   
+
+UPDATE #tmp_report SET Branch_NameAr = (SELECT TOP 1 Branch_NameAr FROM #tmp_report) WHERE Branch_NameAr is null                  
+
+UPDATE #tmp_report SET Branch_DescAr = (SELECT TOP 1 Branch_DescAr FROM #tmp_report) WHERE Branch_DescAr is null                   
+
+UPDATE #tmp_report SET BranchAddress = (SELECT TOP 1 BranchAddress FROM #tmp_report) WHERE BranchAddress is null                   
+
+UPDATE #tmp_report SET BranchPhone = (SELECT TOP 1 BranchPhone FROM #tmp_report) WHERE BranchPhone is null                   
+
+UPDATE #tmp_report SET BranchFax = (SELECT TOP 1 BranchFax FROM #tmp_report) WHERE BranchFax is null                   
+
+UPDATE #tmp_report SET ReceiptTotalFC= (SELECT TOP 1 ReceiptTotalFC FROM #tmp_report) WHERE ReceiptTotalFC is null                   
+
+UPDATE #tmp_report SET gstvatamountfc = (SELECT TOP 1 gstvatamountfc FROM #tmp_report) WHERE gstvatamountfc IS NULL                   
+
+UPDATE #tmp_report SET gstvatamountcc = (SELECT TOP 1 gstvatamountcc FROM #tmp_report) WHERE gstvatamountcc IS NULL                   
+
+UPDATE #tmp_report SET SRGSTValue = isnull(sr.GSTVATAMOUNTFC,0) FROM #tmp_report INNER JOIN RETAIL_SRETURN sr ON SRETURNMID = sr.mid                   
+
+UPDATE #tmp_report SET SRGSTValue=0 WHERE SRGSTValue is null                   
+
+END                   
+
+END                   
+
+UPDATE #tmp_report SET Tag_Price1=B.BDC_PRICE1LC                   
+
+FROM #tmp_report t INNER JOIN BRANCH_DIAMOND_COST B ON ISNULL(B.BDC_STOCK_CODE,'') = ISNULL(t.Stock_Code,'')                   
+
+AND B.BDC_BRANCH_CODE = ISNULL(t.Branch_Code,'') WHERE ISNULL(t.Branch_Code,'') <> ''                   
+
+UPDATE #tmp_report SET Tag_Price1=B.BMC_PRICE1LC                   
+
+FROM #tmp_report t INNER JOIN BRANCH_METAL_COST B ON ISNULL(B.BMC_SUB_STOCK_CODE ,'') = ISNULL(t.Stock_Code,'')                   
+
+AND B.BMC_BRANCH_CODE = ISNULL(t.Branch_Code,'') WHERE ISNULL(t.Branch_Code,'') <> ''                   
+
+UPDATE #tmp_report SET Tag_Price2=B.BMC_PRICE2LC                   
+
+FROM #tmp_report t INNER JOIN BRANCH_METAL_COST B ON ISNULL(B.BMC_SUB_STOCK_CODE ,'') = ISNULL(t.Stock_Code,'')                   
+
+AND B.BMC_BRANCH_CODE = ISNULL(t.Branch_Code,'') WHERE ISNULL(t.Branch_Code,'') <> ''                   
+
+UPDATE #tmp_report SET AR_DESCRIPTION=M.DESCRIPTION_OTHERS FROM #tmp_report t                   
+
+INNER JOIN METAL_STOCK_MASTER M ON m.stock_code = t.MainStockCode                   
+
+WHERE m.stock_code=t.MainStockCode                   
+
+------Metal image updation---                   
+
+update #tmp_report set Picture_Name=PICTURE_PATH from #tmp_report inner join                   
+
+METAL_STOCK_MASTER_DETAILS on SUB_STOCK_CODE=stock_code                   
+
+inner join METAL_DESIGN_MASTER md on DET_DESIGN_CODE=md.DESIGN_CODE                   
+
+----- Old Gold Purchase String                   
+
+SELECT @ScrapOutstr = COALESCE(@ScrapOutstr + ', ','') + K.Karat_Code + 'K ' + cast(IsNull(MD.GrossWt,0) AS NVARCHAR)                   
+
+FROM Metal_Purchase_Detail MD INNER JOIN Metal_Purchase MP ON MD.UniqueId = MP.Mid                   
+
+INNER JOIN Retail_Sales RS ON RS.PurchaseMID = MP.Mid AND RS.PurchaseVocNo = MP.VocNo AND RS.PurchaseVocType = MP.VocType                   
+
+AND RS.Branch_Code = MP.Branch_Code                   
+
+INNER JOIN Metal_Stock_Master K ON MD.Stock_Code = K.Stock_Code                   
+
+WHERE RS.MID = @intmidno                   
+
+----- Sales Return Wt String                   
+
+SELECT @SReturnstr = COALESCE(@SReturnstr + ', ','') + IsNull(K.Karat_Code,'') + 'K ' + cast(IsNull(MD.GrossWt,0) AS NVARCHAR)                   
+
+FROM Retail_SReturn_Detail MD INNER JOIN Retail_SReturn MP ON MD.UniqueId = MP.Mid                   
+
+INNER JOIN Retail_Sales RS ON RS.SReturnMID = MP.Mid AND RS.SReturnVocNo = MP.VocNo AND RS.SReturnVocType = MP.VocType                   
+
+AND RS.Branch_Code = MP.Branch_Code                   
+
+INNER JOIN table_view_metaldiamondstockwithoutcost K ON MD.Stock_Code = K.Stock_Code                   
+
+WHERE RS.MID = @intmidno                   
+
+--- this is for Al Mandoos for Harcoded Mode                   
+
+SELECT @TOTALRECEIVED = sum(AMOUNT_CC) FROM retail_sales tr INNER JOIN retail_receipt rr                   
+
+ON rr.VOCTYPE=tr.voctype AND tr.mid=rr.REFMID WHERE RECEIPT_MODE <> 'CREDIT' AND tr.mid = @intmidno                   
+
+SELECT @CHEQUEREMARK = rr.description FROM retail_sales tr INNER JOIN retail_receipt rr                   
+
+ON rr.VOCTYPE=tr.voctype AND tr.mid=rr.REFMID WHERE RECEIPT_MODE= 'CHEQUE' AND tr.mid = @intmidno                   
+
+DECLARE @HSRReceiptMode table                   
+
+(mode_amount NVARCHAR(4000)                   
+
+)                   
+
+INSERT INTO @HSRReceiptMode(mode_amount)                   
+
+SELECT RECEIPT_MODE + ':' + cast(sum(AMOUNT_CC) as NVARCHAR) + ':' + Description from RETAIL_RECEIPT  
+
+WHERE vocno = @currentmaxvocno and BRANCH_CODE = @Branch_Code and refmid = @intmidno and VOCTYPE = @voctype                   
+
+GROUP BY RECEIPT_MODE , Description                   
+
+ORDER BY RECEIPT_MODE                   
+
+DECLARE @strReceiptMode NVARCHAR(4000)                   
+
+SELECT @strReceiptMode = COALESCE(@strReceiptMode + ', ', '') + mode_amount FROM @HSRReceiptMode                   
+
+select @netvaluefc= ROUND(nettotal,0) from #tmp_report                   
+
+------------------------------VAT RELATED---MUNEER ADDED 2017-18-12-------------------------------                   
+
+DECLARE @SALESTAXABLEAMOUNT NUMERIC(18,3)                   
+
+DECLARE @SALESNONTAXABLEAMOUNT NUMERIC(18,3)                   
+
+DECLARE @SRETURNTAXABLEMOUNT NUMERIC(18,3)                   
+
+DECLARE @SRETURNNONTAXABLEAMOUNT NUMERIC(18,3)                   
+
+DECLARE @SALESTAXAMOUNT NUMERIC(18,3)                   
+
+DECLARE @SRETUNTAXAMOUNT NUMERIC(18,3)                   
+
+DECLARE @ADVAMOUNT NUMERIC(18,3)                   
+
+DECLARE @OLDGOLDVALUE NUMERIC(18,3)                   
+
+DECLARE @ADVTAX NUMERIC(18,3)                   
+
+DECLARE @TAXABLEMOUNT NUMERIC(18,3)                   
+
+DECLARE @NONTAXABLEAMOUNT NUMERIC(18,3)                   
+
+DECLARE @TAXAMOUNT NUMERIC(18,3)                   
+
+DECLARE @SALESRETUNAMOUNT NUMERIC(18,3)                   
+
+SELECT @SALESTAXABLEAMOUNT= SUM(CASE when ISNULL(gstvatonmaking,0)=1 then ISNULL((NETVALUEFC-METALVALUEFC),0)           
+
+else isnull(NETVALUEFC,0) end) from                   
+
+RETAIL_SALES_DETAIL RS INNER JOIN RETAIL_SALES R ON R.MID=RS.UNIQUEID                   
+
+inner join metal_stock_master m on m.STOCK_CODE=MainStockCode                   
+
+where R.MID=@intmidno and ExcludeGSTVAT = 0                   
+
+select @SALESTAXABLEAMOUNT=ISNULL(@SALESTAXABLEAMOUNT,0)+ISNULL(SUM(case when ISNULL(ExcludeGSTVAT,0)=0 then isnull(NETVALUEFC,0)                   
+
+else 0 end) ,0)                   
+
+from RETAIL_SALES_DETAIL RS INNER JOIN RETAIL_SALES R ON R.MID=RS.UNIQUEID                   
+
+inner join diamond_stock_master d on d.STOCK_CODE=rs.STOCK_CODE                   
+
+where R.MID=@intmidno                   
+
+select @SALESNONTAXABLEAMOUNT=isnull( SUM(NETVALUEFC),0) from                   
+
+RETAIL_SALES_DETAIL RS INNER JOIN RETAIL_SALES R ON R.MID=RS.UNIQUEID                   
+
+inner join metal_stock_master m on m.STOCK_CODE=MainStockCode                   
+
+where R.MID=@intmidno AND ExcludeGSTVAT = 1                   
+
+select @SALESNONTAXABLEAMOUNT= ISNULL(@SALESNONTAXABLEAMOUNT,0)+isnull(SUM(METALVALUEFC),0) from                   
+
+RETAIL_SALES_DETAIL RS INNER JOIN RETAIL_SALES R ON R.MID=RS.UNIQUEID                   
+
+inner join metal_stock_master m on m.STOCK_CODE=MainStockCode                   
+
+where R.MID=@intmidno AND ISNULL(gstvatonmaking,0)=1                   
+
+select @SALESNONTAXABLEAMOUNT=ISNULL(@SALESNONTAXABLEAMOUNT,0)+ISNULL(SUM(CASE WHEN ISNULL(ExcludeGSTVAT,0)=1                   
+
+then isnull(NETVALUEFC,0)                   
+
+else 0 end) ,0)                   
+
+from RETAIL_SALES_DETAIL RS INNER JOIN RETAIL_SALES R ON R.MID=RS.UNIQUEID                   
+
+inner join diamond_stock_master d on d.STOCK_CODE=rs.STOCK_CODE                   
+
+where R.MID=@intmidno AND ExcludeGSTVAT=1                   
+
+SELECT @SRETURNNONTAXABLEAMOUNT= isnull(SUM(NETVALUEFC),0) FROM                   
+
+RETAIL_SRETURN_DETAIL RS INNER JOIN RETAIL_SALES R ON R.SRETURNMID=RS.UNIQUEID                   
+
+where R.MID=@intmidno and VAT_AMOUNTFC = 0                   
+
+SELECT @SRETURNNONTAXABLEAMOUNT= ISNULL(@SRETURNNONTAXABLEAMOUNT,0) + isnull(SUM(METALVALUEFC),0) FROM                   
+
+RETAIL_SRETURN_DETAIL RS INNER JOIN RETAIL_SALES R ON R.SRETURNMID=RS.UNIQUEID                   
+
+INNER JOIN metal_stock_master m on m.STOCK_CODE=MainStockCode                   
+
+WHERE R.MID=@intmidno and VAT_AMOUNTFC <> 0 and ISNULL(gstvatonmaking,0)=1                   
+
+SELECT @SRETURNTAXABLEMOUNT=isnull(SUM(NETVALUEFC),0)                   
+
+FROM RETAIL_SRETURN_DETAIL RS INNER JOIN RETAIL_SALES R ON R.SRETURNMID=RS.UNIQUEID                   
+
+WHERE R.MID=@intmidno                   
+
+SET @SRETURNTAXABLEMOUNT = ABS(ISNULL(@SRETURNNONTAXABLEAMOUNT,0) - ISNULL(@SRETURNTAXABLEMOUNT,0) )                   
+
+SELECT @ADVTAX= isnull(SUM(VATAMTFC),0) FROM RETAIL_RECEIPT RR INNER JOIN RETAIL_SALES RS                   
+
+ON RS.MID=RR.REFMID AND RS.VOCTYPE=RR.VOCTYPE                   
+
+WHERE RS.MID=@intmidno                   
+
+SELECT @OLDGOLDVALUE=-1*ISNULL(PURCHASE_VALUE_FC,0) FROM RETAIL_SALES WHERE MID=@intmidno                   
+
+SELECT @SALESTAXAMOUNT=ISNULL(TOTALVAT_AMOUNTFC,0) FROM RETAIL_SALES WHERE MID=@intmidno                   
+
+SELECT @SRETUNTAXAMOUNT=ISNULL(RS.TOTALVAT_AMOUNTFC,0) FROM RETAIL_SRETURN RS INNER JOIN RETAIL_SALES R                   
+
+ON SRETURNMID=RS.MID WHERE R.MID=@intmidno                   
+
+SELECT @SALESRETUNAMOUNT= -1*(SRETURN_VALUE_FC - RS.TOTALVAT_AMOUNTFC) FROM RETAIL_SRETURN RS INNER JOIN RETAIL_SALES R                   
+
+ON SRETURNMID=RS.MID WHERE R.MID=@intmidno                   
+
+--------------FINAL VALUE------------                   
+
+SELECT @TAXABLEMOUNT=ISNULL(@SALESTAXABLEAMOUNT,0)-ISNULL(@SRETURNTAXABLEMOUNT,0)                   
+
+SELECT @NONTAXABLEAMOUNT = ISNULL(@SALESNONTAXABLEAMOUNT,0) - ISNULL(@SRETURNNONTAXABLEAMOUNT,0) + ISNULL(@OLDGOLDVALUE,0)                   
+
+SELECT @TAXAMOUNT=ISNULL(@SALESTAXAMOUNT,0)- ISNULL(@SRETUNTAXAMOUNT,0)                
+
+--added by sanket 15.02.2021 blue diamond invoice related               
+
+DECLARE @STOCKCODENEW NVARCHAR(4000)               
+
+SELECT @STOCKCODENEW = COALESCE(@STOCKCODENEW + '       ', '') + STOCK_CODE FROM RETAIL_SALES_DETAIL WHERE uniqueid=@intmidno               
+
+group by STOCK_CODE        
+
+exec USP_GENERATEQRCODEWEB_RETAIL @Voctype,@intmidno,@Branch_Code  
+
+UPDATE #tmp_report SET QRCODEVALUE=retail_sales.QRCODEVALUE from #tmp_report   
+
+inner join retail_sales on retail_sales.MID=#tmp_report.mid  
+
+SELECT *, @TOTALRECEIVED AS TOTALRECEIVED,@CHEQUEREMARK AS CHEQUEREMARK, @ScrapOutstr AS PurchaseScrapstr,                   
+
+@SReturnstr AS SReturnWtstr, @dblSReturnWt AS SReturnPWt, @dblSReturnGrWt AS SReturnGWt,                   
+
+@LASTUPDATEDDATE as LASTUPDATEDDATE, @strReceiptMode as GBReceiptModeSingleLine ,                   
+
+[dbo].[Fn_Amountinarabicword] (ROUND(ReceiptTotalFC,0),Item_cuurency) RECEIPTOTALSINGLELINE,           
+
+@netvaluefc as NETVALUE,@TOTALRECEIVEDCARD AS TOTALCREDITCARD                   
+
+, @TOTALRECEIVEDADV AS TOTALADVRECEIVED ,ISNULL(@TAXABLEMOUNT,0) AS TAXABLEMOUNT,ISNULL(@NONTAXABLEAMOUNT,0) AS NONTAXABLEAMOUNT,                   
+
+ISNULL(@TAXAMOUNT,0) AS TAXAMOUNT,ISNULL(@SALESRETUNAMOUNT,0) AS SALESRETUNAMOUNT,ISNULL(@OLDGOLDVALUE,0) OLDGOLDVALUE ,                   
+
+ISNULL(@SALESNONTAXABLEAMOUNT,0) as SALESNONTAXABLEAMOUNT, ISNULL(@SRETURNNONTAXABLEAMOUNT,0) as SRETURNNONTAXABLEAMOUNT,                   
+
+ISNULL(@SchemeSalesFixingPureWt,0) as SchemeSalesFixingPureWt,isnull(@TOTALCASH,0) AS TOTALCASH ,@ratetype as ratetypegold,@rate as rategold,@ratetypesilver as ratetypesilver,@ratesilver as ratesilver,                   
+
+@TRAYN AS TRAYN,@TRANo AS TRANo,@DTREMARKS AS DTREMARKS,@poscustidno as poscustidno,@PURCHASEVOCNO AS PURCHASEVOCNO,                   
+
+@PURCHASEVOCTYPE AS PURCHASEVOCTYPE,ISNULL(@SRETUNTAXAMOUNT,0) AS SALESRETURNTAXAMOUNT,@POSORDERADVVATAMTLC AS POSORDERADVVATAMTLC,@POSORDERADVVATAMTFC AS POSORDERADVVATAMTFC,@STOCKCODENEW as STOCKCODENEW       ,        
+
+@receiptotalcc  as  receiptotalcc,@refundcc  as refundcc,@PLANETQRURL AS PLANETQRURL         
+
+FROM #tmp_report ORDER BY srno

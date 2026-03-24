@@ -852,6 +852,27 @@ function DrawerContent() {
           </div>
         )}
 
+        {/* POS summary card */}
+        {(() => {
+          const posInvoices = invoices.filter((i) => i.invoiceNum.startsWith("INV-"));
+          if (posInvoices.length === 0) return null;
+          const posTotal = posInvoices.reduce((s, i) => s + i.price, 0);
+          return (
+            <div className="mx-4 mb-3 mt-1 flex items-center gap-3 px-4 py-3 rounded-xl"
+              style={{ background: "linear-gradient(135deg, #eff6ff, #e0f2fe)", border: "1px solid #bfdbfe" }}>
+              <div className="w-7 h-7 rounded-lg bg-blue-500 flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-xs font-black">POS</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-blue-700">مبيعات نقطة البيع اليوم</p>
+                <p className="text-xs text-blue-500 mt-0.5">
+                  {posInvoices.length} {posInvoices.length === 1 ? "فاتورة" : "فواتير"} — إجمالي: {fmt(posTotal)} ريال
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
         {invoices.length > 0 && (
           <div className="hidden md:grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 border-b border-slate-50 gap-2 items-center">
             <span className="text-xs font-bold text-slate-300">#</span>
@@ -1368,16 +1389,29 @@ function InvoiceRow({ inv, idx, readOnly, onUpdate, onDelete, employees, fmt, is
     </select>
   );
 
+  const isPOS = inv.invoiceNum.startsWith("INV-");
+  const posBadge = isPOS ? (
+    <span className="inline-flex items-center text-[10px] font-black text-white bg-blue-500 px-1.5 py-0.5 rounded-md leading-none">
+      POS
+    </span>
+  ) : null;
+
   const invoiceNumEl = inv.type === "عادية" ? (
     readOnly ? (
-      <span className="text-xs text-slate-500">{inv.invoiceNum || "—"}</span>
+      <span className="flex items-center gap-1 flex-wrap">
+        {posBadge}
+        <span className="text-xs text-slate-500">{inv.invoiceNum || "—"}</span>
+      </span>
     ) : (
-      <input type="text" value={localInvoiceNum}
-        onChange={(e) => setLocalInvoiceNum(e.target.value)}
-        onBlur={() => { if (localInvoiceNum !== inv.invoiceNum) onUpdate({ invoiceNum: localInvoiceNum }); }}
-        placeholder="رقم الفاتورة"
-        className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full"
-      />
+      <div className="flex items-center gap-1">
+        {posBadge}
+        <input type="text" value={localInvoiceNum}
+          onChange={(e) => setLocalInvoiceNum(e.target.value)}
+          onBlur={() => { if (localInvoiceNum !== inv.invoiceNum) onUpdate({ invoiceNum: localInvoiceNum }); }}
+          placeholder="رقم الفاتورة"
+          className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full"
+        />
+      </div>
     )
   ) : <span className="text-xs text-slate-200">—</span>;
 

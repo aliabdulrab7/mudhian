@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut, LayoutDashboard, BookOpen, Archive, Settings, BarChart3,
-  SlidersHorizontal, Menu, X,
+  SlidersHorizontal, Menu, X, Package, ShoppingCart, Wrench, Users,
+  Building2, ArrowLeftRight,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
 
@@ -37,14 +38,25 @@ export default function NavBar() {
 
   const navLinks = user.role === "admin" ? [
     { href: "/dashboard", icon: <LayoutDashboard size={16} />, label: "لوحة التحكم" },
+    { href: "/inventory", icon: <Package size={16} />, label: "المخزون" },
+    { href: "/pos", icon: <ShoppingCart size={16} />, label: "نقطة البيع" },
+    { href: "/repairs", icon: <Wrench size={16} />, label: "الصيانة" },
+    { href: "/customers", icon: <Users size={16} />, label: "العملاء" },
+    { href: "/suppliers", icon: <Building2 size={16} />, label: "الموردون" },
+    { href: "/stock-transfers", icon: <ArrowLeftRight size={16} />, label: "تحويلات المخزون" },
     { href: "/reports", icon: <BarChart3 size={16} />, label: "التقارير" },
-    { href: "/admin", icon: <Settings size={16} />, label: "إدارة النظام" },
+    { href: "/admin", icon: <Settings size={16} />, label: "الإدارة" },
   ] : user.role === "viewer" ? [
     { href: "/dashboard", icon: <LayoutDashboard size={16} />, label: "لوحة التحكم" },
+    { href: "/inventory", icon: <Package size={16} />, label: "المخزون" },
+    { href: "/customers", icon: <Users size={16} />, label: "العملاء" },
     { href: "/reports", icon: <BarChart3 size={16} />, label: "التقارير" },
   ] : [
     { href: `/branch/${branchId}/drawer`, icon: <BookOpen size={16} />, label: "اليومية" },
     { href: `/branch/${branchId}/archive`, icon: <Archive size={16} />, label: "الأرشيف" },
+    { href: "/inventory", icon: <Package size={16} />, label: "المخزون" },
+    { href: "/pos", icon: <ShoppingCart size={16} />, label: "نقطة البيع" },
+    { href: "/repairs", icon: <Wrench size={16} />, label: "الصيانة" },
   ];
 
   return (
@@ -150,16 +162,22 @@ function BottomNav({ user, pathname, branchId }: {
 }) {
   const links = user.role === "admin" ? [
     { href: "/dashboard", icon: <LayoutDashboard size={20} />, label: "التحكم" },
-    { href: "/reports", icon: <BarChart3 size={20} />, label: "التقارير" },
+    { href: "/inventory", icon: <Package size={20} />, label: "المخزون" },
+    { href: "/suppliers", icon: <Building2 size={20} />, label: "الموردون" },
+    { href: "/stock-transfers", icon: <ArrowLeftRight size={20} />, label: "تحويلات" },
+    { href: "/repairs", icon: <Wrench size={20} />, label: "الصيانة" },
     { href: "/admin", icon: <Settings size={20} />, label: "الإدارة" },
-    { href: "/settings", icon: <SlidersHorizontal size={20} />, label: "الإعدادات" },
   ] : user.role === "viewer" ? [
     { href: "/dashboard", icon: <LayoutDashboard size={20} />, label: "التحكم" },
+    { href: "/inventory", icon: <Package size={20} />, label: "المخزون" },
+    { href: "/customers", icon: <Users size={20} />, label: "العملاء" },
     { href: "/reports", icon: <BarChart3 size={20} />, label: "التقارير" },
     { href: "/settings", icon: <SlidersHorizontal size={20} />, label: "الإعدادات" },
   ] : [
     { href: `/branch/${branchId}/drawer`, icon: <BookOpen size={20} />, label: "اليومية" },
-    { href: `/branch/${branchId}/archive`, icon: <Archive size={20} />, label: "الأرشيف" },
+    { href: "/inventory", icon: <Package size={20} />, label: "المخزون" },
+    { href: "/pos", icon: <ShoppingCart size={20} />, label: "البيع" },
+    { href: "/repairs", icon: <Wrench size={20} />, label: "الصيانة" },
     { href: "/settings", icon: <SlidersHorizontal size={20} />, label: "الإعدادات" },
   ];
 

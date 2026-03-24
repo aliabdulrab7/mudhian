@@ -1,10 +1,9 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ==================== المستخدمون والفروع ====================
@@ -17,6 +16,13 @@ model Branch {
   users     User[]
   drawers   DailyDrawer[]
   employees Employee[]
+
+  // ERP relations
+  jewelryItems  JewelryItem[]
+  sales         Sale[]
+  repairs       Repair[]
+  transfersFrom StockTransfer[] @relation("TransferFrom")
+  transfersTo   StockTransfer[] @relation("TransferTo")
 }
 
 model User {
@@ -27,6 +33,10 @@ model User {
   branchId  Int?
   branch    Branch?  @relation(fields: [branchId], references: [id])
   createdAt DateTime @default(now())
+
+  // ERP relations
+  metalPrices MetalPrice[]
+  sales       Sale[]
 }
 
 // ==================== اليومية ====================
@@ -128,6 +138,8 @@ model Employee {
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
   invoices  Invoice[]
+  sales     Sale[]
+  repairs   Repair[]
 }
 
 // الحوالات البنكية (5 بنوك ثابتة)
@@ -139,4 +151,187 @@ model BankTransfer {
   amount      Float       @default(0)
   beneficiary String      @default("")
   notes       String      @default("")
+}
+
+// ==================== نظام ERP للمجوهرات ====================
+
+// المخزون — قطع المجوهرات
+model JewelryItem {
+  id            Int      @id @default(autoincrement())
+  sku           String   @unique           // رمز القطعة (توليد تلقائي مثل RNG-0001)
+  barcode       String   @unique           // باركود للطابعة
+  category      String                     // خاتم | سواره | عقد | حلق | طقم | صيانة | أخرى
+  metalType     String   @default("gold")  // gold | silver | platinum
+  karat         Int      @default(18)      // عيار: 18 | 21 | 22 | 24
+  grossWeight   Float    @default(0)       // الوزن الإجمالي (جرام)
+  netWeight     Float    @default(0)       // الوزن الصافي للمعدن (جرام)
+  stoneType     String   @default("")      // نوع الحجر (الماس، ياقوت، زمرد ...)
+  stoneWeight   Float    @default(0)       // وزن الحجر (قيراط)
+  stoneCount    Int      @default(0)       // عدد الأحجار
+  stoneValue    Float    @default(0)       // قيمة الحجر (ريال)
+  makingCharges Float    @default(0)       // أجرة الصنعة (ريال)
+  cost          Float    @default(0)       // سعر التكلفة (ريال)
+  salePrice     Float    @default(0)       // سعر البيع (ريال) — يُحسب تلقائياً
+  margin        Float    @default(0)       // هامش الربح (ريال)
+  status        String   @default("available") // available | sold | reserved | repair
+  branchId      Int
+  branch        Branch   @relation(fields: [branchId], references: [id])
+  supplierId    Int?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  supplierRef   String   @default("")      // مرجع المورد (نص حر - للتوافق مع البيانات القديمة)
+  notes         String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  soldAt        DateTime?
+
+  saleItems     SaleItem[]
+  transferItems StockTransferItem[]
+
+  @@index([branchId])
+  @@index([status])
+  @@index([category])
+}
+
+// أسعار المعادن اليومية (يدوي من الإدارة)
+model MetalPrice {
+  id           Int      @id @default(autoincrement())
+  date         DateTime @db.Date
+  metalType    String   @default("gold")  // gold | silver | platinum
+  pricePerGram Float                       // سعر الجرام بالريال
+  setBy        Int
+  user         User     @relation(fields: [setBy], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@unique([date, metalType])
+  @@index([date])
+}
+
+// العملاء
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String   @default("")
+  vatNumber String   @default("")
+  notes     String   @default("")
+  createdAt DateTime @default(now())
+
+  sales   Sale[]
+  repairs Repair[]
+}
+
+// المبيعات (فاتورة بيع)
+model Sale {
+  id            Int       @id @default(autoincrement())
+  invoiceNum    String    @unique           // رقم الفاتورة (توليد تلقائي)
+  branchId      Int
+  branch        Branch    @relation(fields: [branchId], references: [id])
+  customerId    Int?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  employeeId    Int?
+  employee      Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  totalAmount   Float     @default(0)
+  discountAmount Float    @default(0)
+  paymentMethod String    @default("cash") // cash | card | transfer
+  notes         String    @default("")
+  createdAt     DateTime  @default(now())
+  createdBy     Int
+  user          User      @relation(fields: [createdBy], references: [id])
+
+  saleItems SaleItem[]
+
+  @@index([branchId])
+  @@index([createdAt])
+}
+
+// بنود فاتورة البيع
+model SaleItem {
+  id            Int         @id @default(autoincrement())
+  saleId        Int
+  sale          Sale        @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  jewelryItemId Int
+  jewelryItem   JewelryItem @relation(fields: [jewelryItemId], references: [id])
+  price         Float       // لقطة من سعر البيع وقت البيع
+  discount      Float       @default(0)
+}
+
+// الصيانة والإصلاح
+model Repair {
+  id             Int       @id @default(autoincrement())
+  branchId       Int
+  branch         Branch    @relation(fields: [branchId], references: [id])
+  customerId     Int?
+  customer       Customer? @relation(fields: [customerId], references: [id])
+  employeeId     Int?
+  employee       Employee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  itemDescription String              // وصف القطعة المُصلَحة
+  receivedCondition String @default("") // حالة القطعة عند الاستلام
+  estimatedCost  Float     @default(0)  // تكلفة الإصلاح المتوقعة
+  actualCost     Float     @default(0)  // التكلفة الفعلية
+  status         String    @default("received") // received | in_progress | completed | delivered
+  receivedAt     DateTime  @default(now())
+  estimatedReady DateTime?
+  deliveredAt    DateTime?
+  notes          String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  statusLogs RepairStatusLog[]
+
+  @@index([branchId])
+  @@index([status])
+}
+
+// سجل حالات الصيانة
+model RepairStatusLog {
+  id        Int      @id @default(autoincrement())
+  repairId  Int
+  repair    Repair   @relation(fields: [repairId], references: [id], onDelete: Cascade)
+  status    String   // received | in_progress | completed | delivered
+  note      String   @default("")
+  changedBy Int      // userId
+  changedAt DateTime @default(now())
+
+  @@index([repairId])
+}
+
+// ==================== الموردون ====================
+
+model Supplier {
+  id           Int           @id @default(autoincrement())
+  name         String        @unique
+  phone        String        @default("")
+  email        String        @default("")
+  address      String        @default("")
+  notes        String        @default("")
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  jewelryItems JewelryItem[]
+}
+
+// ==================== تحويلات المخزون ====================
+
+model StockTransfer {
+  id           Int                 @id @default(autoincrement())
+  fromBranchId Int
+  fromBranch   Branch              @relation("TransferFrom", fields: [fromBranchId], references: [id])
+  toBranchId   Int
+  toBranch     Branch              @relation("TransferTo", fields: [toBranchId], references: [id])
+  status       String              @default("pending") // pending | completed | cancelled
+  notes        String              @default("")
+  createdBy    Int
+  createdAt    DateTime            @default(now())
+  completedAt  DateTime?
+  items        StockTransferItem[]
+
+  @@index([fromBranchId])
+  @@index([toBranchId])
+  @@index([status])
+}
+
+model StockTransferItem {
+  id            Int           @id @default(autoincrement())
+  transferId    Int
+  transfer      StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  jewelryItemId Int
+  jewelryItem   JewelryItem   @relation(fields: [jewelryItemId], references: [id])
 }

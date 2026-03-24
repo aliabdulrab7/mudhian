@@ -1,16 +1,23 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-import path from "path";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient; prismaVersion: string };
 
 // Schema version tag — bump this whenever you run `prisma migrate dev`
 // to force the singleton to recreate after a schema change in dev.
-const SCHEMA_VERSION = "v4_employees";
+const SCHEMA_VERSION = "v6_supplier_transfer";
 
 function createPrisma() {
-  const dbPath = path.resolve(process.cwd(), "prisma/dev.db");
-  const adapter = new PrismaLibSql({ url: `file:${dbPath}` });
+  // Strip sslmode from the URL so we can set SSL options programmatically.
+  // DigitalOcean managed PG uses a self-signed CA; rejectUnauthorized:false
+  // keeps the connection encrypted while skipping chain verification.
+  const connectionString = (process.env.DATABASE_URL || "").replace(
+    /([?&])sslmode=[^&]*/,
+    "$1sslmode=no-verify"
+  );
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const adapter = new PrismaPg({ connectionString, ssl: { rejectUnauthorized: false } } as any);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return new PrismaClient({ adapter } as any);
 }

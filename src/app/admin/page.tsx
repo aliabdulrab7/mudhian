@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye, LayoutTemplate, GripVertical, X, Users } from "lucide-react";
+import { Trash2, Plus, Pencil, Download, KeyRound, ClipboardList, Eye, LayoutTemplate, GripVertical, X, Users, TrendingUp } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { parseTemplate, DEFAULT_TEMPLATE, type TemplateRow } from "@/lib/drawerTemplate";
 import {
@@ -24,7 +24,7 @@ interface AuditEntry {
 
 interface Viewer { id: number; username: string; createdAt: string; }
 interface Employee { id: number; name: string; isActive: boolean; createdAt: string; }
-type Tab = "branches" | "viewers" | "audit" | "template" | "employees";
+type Tab = "branches" | "viewers" | "audit" | "template" | "employees" | "metalPrices";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("branches");
@@ -59,6 +59,13 @@ export default function AdminPage() {
   const [templateSaved, setTemplateSaved] = useState(false);
   const [newRowForm, setNewRowForm] = useState({ label: "", sign: "+" as "+" | "-" });
   const [showNewRow, setShowNewRow] = useState(false);
+
+  // Metal Prices
+  interface MetalPriceEntry { id: number; date: string; pricePerGram: number; metalType: string; }
+  const [metalPrices, setMetalPrices] = useState<MetalPriceEntry[]>([]);
+  const [metalPriceForm, setMetalPriceForm] = useState({ pricePerGram: "", metalType: "gold" });
+  const [metalPriceSaving, setMetalPriceSaving] = useState(false);
+  const [metalPriceSaved, setMetalPriceSaved] = useState(false);
 
   // Employees
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -102,6 +109,17 @@ export default function AdminPage() {
     }
   }, []);
 
+  const fetchMetalPrices = useCallback(async () => {
+    const res = await fetch("/api/metal-prices?metalType=all&limit=30");
+    if (res.ok) {
+      const data = await res.json();
+      setMetalPrices(data.history || []);
+      if (data.today) {
+        setMetalPriceForm(f => ({ ...f, pricePerGram: String(data.today.pricePerGram) }));
+      }
+    }
+  }, []);
+
   const fetchEmployees = useCallback(async (branchId: number) => {
     setEmpLoading(true);
     const res = await fetch(`/api/branches/${branchId}/employees`);
@@ -140,6 +158,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === "viewers") fetchViewers(); }, [tab, fetchViewers]);
   useEffect(() => { if (tab === "audit") fetchAudit(1); }, [tab, fetchAudit]);
   useEffect(() => { if (tab === "template") fetchTemplate(); }, [tab, fetchTemplate]);
+  useEffect(() => { if (tab === "metalPrices") fetchMetalPrices(); }, [tab, fetchMetalPrices]);
   useEffect(() => {
     if (tab === "employees" && empBranchId !== "") fetchEmployees(empBranchId as number);
   }, [tab, empBranchId, fetchEmployees]);
@@ -207,6 +226,23 @@ export default function AdminPage() {
     if (empBranchId !== "") fetchEmployees(empBranchId as number);
   };
 
+  const handleSaveMetalPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setMetalPriceSaving(true);
+    await fetch("/api/metal-prices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pricePerGram: parseFloat(metalPriceForm.pricePerGram),
+        metalType: metalPriceForm.metalType,
+      }),
+    });
+    setMetalPriceSaving(false);
+    setMetalPriceSaved(true);
+    setTimeout(() => setMetalPriceSaved(false), 2500);
+    fetchMetalPrices();
+  };
+
   const handleAddViewer = async (e: React.FormEvent) => {
     e.preventDefault(); setViewerError(""); setSaving(true);
     const res = await fetch("/api/viewers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(viewerForm) });
@@ -269,6 +305,9 @@ export default function AdminPage() {
           </button>
           <button onClick={() => setTab("employees")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "employees" ? "bg-white shadow-sm text-teal-700" : "text-slate-500 hover:text-slate-700"}`}>
             <Users size={14} /> الموظفون
+          </button>
+          <button onClick={() => setTab("metalPrices")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "metalPrices" ? "bg-white shadow-sm text-yellow-700" : "text-slate-500 hover:text-slate-700"}`}>
+            <TrendingUp size={14} /> أسعار المعادن
           </button>
         </div>
       </div>
@@ -595,6 +634,95 @@ export default function AdminPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Metal Prices Tab */}
+      {tab === "metalPrices" && (
+        <div className="space-y-4">
+          {/* Set Today's Price */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-yellow-50 flex items-center gap-2">
+              <TrendingUp size={16} className="text-yellow-600" />
+              <p className="text-sm font-bold text-slate-700">تحديد سعر اليوم</p>
+            </div>
+            <form onSubmit={handleSaveMetalPrice} className="p-4">
+              <div className="flex flex-wrap gap-3 items-end">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">نوع المعدن</label>
+                  <select
+                    value={metalPriceForm.metalType}
+                    onChange={e => setMetalPriceForm(f => ({ ...f, metalType: e.target.value }))}
+                    className="border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400 bg-white min-w-[120px]"
+                  >
+                    <option value="gold">ذهب</option>
+                    <option value="silver">فضة</option>
+                  </select>
+                </div>
+                <div className="flex-1 min-w-[160px]">
+                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">السعر لكل جرام (ر.س)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={metalPriceForm.pricePerGram}
+                    onChange={e => setMetalPriceForm(f => ({ ...f, pricePerGram: e.target.value }))}
+                    placeholder="مثال: 240.50"
+                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    dir="ltr"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  {metalPriceSaved && <span className="text-xs text-emerald-600 font-medium">✓ تم الحفظ</span>}
+                  <button
+                    type="submit"
+                    disabled={metalPriceSaving}
+                    className="bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-medium px-5 py-2 rounded-xl transition disabled:opacity-60"
+                  >
+                    {metalPriceSaving ? "جاري الحفظ..." : "حفظ السعر"}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          {/* Price History */}
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <p className="text-sm font-bold text-slate-700">سجل الأسعار</p>
+            </div>
+            {metalPrices.length === 0 ? (
+              <div className="text-center py-12 text-slate-400 text-sm">لا توجد أسعار مسجلة بعد</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">التاريخ</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">المعدن</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600">السعر / جرام</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metalPrices.map(p => (
+                      <tr key={p.id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-3 text-slate-600">
+                          {new Date(p.date).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "2-digit", day: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${p.metalType === "gold" ? "bg-yellow-100 text-yellow-700" : "bg-slate-100 text-slate-600"}`}>
+                            {p.metalType === "gold" ? "ذهب" : "فضة"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-slate-800">{p.pricePerGram.toLocaleString("en-SA")} ر.س</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

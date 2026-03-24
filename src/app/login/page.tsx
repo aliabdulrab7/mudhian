@@ -20,14 +20,16 @@ export default function LoginPage() {
       body: JSON.stringify({ username, password }),
     });
 
-    const data = await res.json();
+    let data: Record<string, unknown> = {};
+    try { data = await res.json(); } catch { /* empty body */ }
+
     if (!res.ok) {
-      setError(data.error);
+      setError((data.error as string) || "حدث خطأ، حاول مرة أخرى");
       setLoading(false);
       return;
     }
 
-    if (data.role === "admin") router.push("/dashboard");
+    if (data.role === "admin" || data.role === "viewer") router.push("/dashboard");
     else router.push(`/branch/${data.branchId}/drawer`);
   };
 
