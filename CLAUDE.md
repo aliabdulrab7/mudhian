@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**يومية المضيان للمجوهرات** — Multi-branch Arabic accounting web app for a jewelry business.
+**يومية المضيان للمجوهرات** — Multi-branch Arabic ERP + accounting web app for a jewelry business.
 
 **Three roles:**
-- `admin` — full access: all branches, dashboard, reports, system admin, template editor
+- `admin` — full access: all branches, dashboard, reports, system admin, ERP modules
 - `branch` — own branch only: daily journal + archive
 - `viewer` — read-only: dashboard + reports + any branch drawer (cannot edit)
 
-**Stack:** Next.js 16 (App Router), TypeScript, Tailwind v4 CSS, Prisma 7 + SQLite, `jose` JWT auth, `bcryptjs`, `next-pwa` (Workbox service worker).
+**Stack:** Next.js 16 (App Router), TypeScript, Tailwind v4 CSS, Prisma 7 + PostgreSQL (DigitalOcean managed), `jose` JWT auth, `bcryptjs`, `next-pwa` (Workbox service worker), `@prisma/adapter-pg`.
 
 **Production:** https://mudhiyan.shop — DigitalOcean droplet, nginx reverse proxy, Let's Encrypt SSL, PM2 process manager. Auto-deploys on push to `main` via `.github/workflows/deploy.yml`.
 
@@ -24,7 +24,7 @@ npm run lint      # ESLint
 
 # Database — after ANY schema change run all three:
 npx prisma migrate dev --name <name>   # Apply schema changes + generate client
-rm -rf .next                           # REQUIRED: clear Turbopack cache or Invoice/new models won't be found
+rm -rf .next                           # REQUIRED: clear Turbopack cache
 npm run dev                            # Restart with fresh bundle
 
 npx prisma studio                      # GUI to inspect DB
@@ -33,194 +33,163 @@ npx prisma studio                      # GUI to inspect DB
 curl http://localhost:3000/api/seed    # Creates admin account (admin/admin123)
 ```
 
-> **Critical:** Turbopack aggressively caches Prisma client bundles. After every `prisma migrate dev`, you MUST delete `.next/` before restarting the dev server, or the old schema (without new models/relations) will still be used at runtime.
-
-> **Also:** After adding a new model, bump `SCHEMA_VERSION` in `src/lib/prisma.ts` to force the Prisma singleton to recreate itself on hot reload.
+> **Critical:** After every `prisma migrate dev`, delete `.next/` before restarting or old schema will still be used at runtime. Also bump `SCHEMA_VERSION` in `src/lib/prisma.ts` to force Prisma singleton recreation.
 
 ## Architecture
+
+### Database (Prisma v7 + PostgreSQL)
+- `DATABASE_URL` in `.env` — DigitalOcean managed PostgreSQL with SSL
+- `src/lib/prisma.ts` uses `@prisma/adapter-pg` (`PrismaPg`) with a `pg.Pool` configured for SSL (`rejectUnauthorized: false`, stripping `sslmode` from URL to set it programmatically)
+- `prisma.config.ts` holds Prisma v7 config; do NOT put `url` in `datasource db {}` in schema
+- `SCHEMA_VERSION` constant — bump after every migration (currently `"v6_supplier_transfer"`)
+- `ca-certificate.crt` in repo root — DigitalOcean CA cert (used for SSL if present)
+
+**All models:**
+
+*Core (Daily Journal):*
+- `Branch`, `User`, `DailyDrawer`, `SoldItem`, `BankTransfer`, `Invoice`, `AuditLog`, `AppSetting`, `Employee`
+
+*ERP — Inventory & Pricing:*
+- `JewelryItem` — SKU, barcode, category, karat, weights, cost, salePrice, status (available/sold/reserved/repair), branchId, supplierId (FK)
+- `MetalPrice` — daily gold/silver/platinum prices per gram
+- `Supplier` — name, phone, email, address, isActive; linked to JewelryItems
+
+*ERP — Sales:*
+- `Customer` — name, phone, vatNumber
+- `Sale` — invoiceNum, branch, customer, employee, totalAmount, paymentMethod (cash/card/transfer), notes (refund marker uses `[مرتجع]` prefix)
+- `SaleItem` — line items on a sale (FK to JewelryItem)
+
+*ERP — Repairs:*
+- `Repair` — customer, employee, itemDescription, status (received/in_progress/completed/delivered), costs, dates
+- `RepairStatusLog` — history of status changes
+
+*ERP — Stock:*
+- `StockTransfer` — fromBranch → toBranch, status (pending/completed/cancelled), items
+- `StockTransferItem` — FK to JewelryItem (cascade delete on transfer)
 
 ### Auth (`src/lib/auth.ts` + `src/middleware.ts`)
 - JWT stored in `session` httpOnly cookie (7 days)
 - `getSession()` reads cookie server-side; `GET /api/auth/me` reads it client-side
-- NavBar re-fetches session on every pathname change to avoid stale user state after switching accounts
-- Branch users restricted to their own `branchId` routes; viewers have read-only access to all; admin has full access
-
-### Database (Prisma v7 + SQLite)
-- DB file: `prisma/dev.db` — `DATABASE_URL="file:./prisma/dev.db"` in `.env`
-- `prisma.config.ts` holds Prisma v7 config (NOT `schema.prisma`)
-- `src/lib/prisma.ts` uses `@prisma/adapter-libsql` (`PrismaLibSql`) — required for Prisma v7 SQLite
-- Do NOT put `url` in `datasource db {}` in schema
-- `SCHEMA_VERSION` constant in `src/lib/prisma.ts` — bump after every `prisma migrate dev` to force singleton recreation in dev
-
-**Models:** `Branch`, `User`, `DailyDrawer`, `SoldItem`, `BankTransfer`, `Invoice`, `AuditLog`, `AppSetting`, `Employee`
-
-**Employee model:** belongs to a `Branch`, has `name` and `isActive`. Managed in `/admin` → Employees tab. Fetched per-branch via `GET /api/branches/[id]/employees`. Invoice rows let user pick an employee from a dropdown; stores both `employeeId` (FK) and `employeeName` (snapshot).
-
-**DailyDrawer notable fields:**
-- `isLocked: Boolean` — branch users cannot edit locked drawers; only admin can unlock
-- `notes` — `JSON.stringify(string[])` array of note strings
-- `customFields` — `JSON.stringify(Record<string, number>)` for custom template row values
-- `fieldNotes` — `JSON.stringify(Record<string, string>)` for per-field inline notes
-
-**Invoice fields:** `drawerId`, `type` ("صميت"|"عادية"), `invoiceNum`, `price`, `employeeName`, `barcodes` (JSON array string). Invoices are reference-only — they do NOT feed into `bookBalance` calculations.
+- NavBar re-fetches session on every pathname change to avoid stale state
 
 ### Daily Journal Logic
 When a drawer is created (`GET /api/drawer`):
 - 6 `SoldItem` rows auto-created: طقم، خاتم، حلق، اسوارة، تعليقة، نص طقم
 - 5 `BankTransfer` rows auto-created: الانماء، الراجحي، الرياض، ساب، الاهلي
 - `yesterdayBalance` auto-filled from previous day's `bookBalance`
-- `Invoice` rows are NOT auto-created — zero invoices on a new drawer
 
 **Calculations (computed on frontend, stored on save):**
-- `balanceValue` = manually entered (bank/network sales — NOT auto-summed from bank transfers)
+- `balanceValue` = manually entered (bank/network sales — NOT auto-summed)
 - `cashSales` = `totalSales` − `balanceValue`
-- `bookBalance` = `cashSales` − `bankTotal` + Σ(enabled template "+" rows) − Σ(enabled template "−" rows)
+- `bookBalance` = `cashSales` − `bankTotal` + Σ(enabled "+" rows) − Σ(enabled "−" rows)
 - `difference` = `actualBalance` − `bookBalance`
 
-`computeBookBalance` in `drawer/page.tsx` is **template-driven** — it receives `template: TemplateRow[]` and `customFields: Record<string, number>` and iterates over enabled rows. Do not revert to hardcoded field names.
+`computeBookBalance` is **template-driven** — never hardcode field names.
 
-Auto-save: any field change triggers 1.5s debounced `PATCH /api/drawer/[id]`. Invoice saves go through their own dedicated sub-routes (not through the main PATCH).
+**POS → Drawer sync:** When a sale is created via `POST /api/pos`, it auto-creates `Invoice` records in that day's drawer and increments `totalSales` (+ `balanceValue` for card/transfer). Refunding a sale (`PATCH /api/pos/[id]` with `{ action: "refund" }`) reverses this. Locked drawers are skipped.
+
+**POS invoices in drawer** are identified by `invoiceNum.startsWith("INV-")` — shown with a blue "POS" badge and a summary card.
+
+Auto-save: field changes trigger 1.5s debounced `PATCH /api/drawer/[id]`. Invoice saves use dedicated sub-routes.
+
+### SKU & Barcode (`src/lib/skuGenerator.ts`, `src/lib/barcodeUtils.ts`)
+- `generateSKU(category)` → `PREFIX-NNNN` (RNG, BRL, NKL, EAR, FSET, REP, ITM)
+- `detectBarcodeType(barcode)` → Arabic category name from prefix
+- Barcode input in drawer: text modal with quick-prefix buttons; creates "صميت" invoice
 
 ### Journal Template (`src/lib/drawerTemplate.ts`)
 - `TemplateRow`: `{ key, label, sign: "+" | "-", enabled, custom }`
-- `DEFAULT_TEMPLATE` — the 12 built-in calculation rows
-- `parseTemplate(json)` — parses JSON from AppSetting, falls back to DEFAULT_TEMPLATE
-- `parseNotes(raw)` — parses `notes` field (handles both old plain string and new JSON array format)
-- Template stored in `AppSetting` with key `"drawerTemplate"` as JSON
-- Admin edits via the "قالب اليومية" tab in `/admin`
-- Custom rows (added by admin) use keys like `custom_<timestamp>`; their values live in `DailyDrawer.customFields`
-
-### Barcode Utilities (`src/lib/barcodeUtils.ts`)
-- `detectBarcodeType(barcode)` — maps barcode prefix to Arabic item category:
-  - `RNG*` → خاتم, `BRL*` → سواره, `NKL*`/`PND*` → عقد, `EAR*` → حلق, `FSET*` → طقم, `REP*` → صيانة
-
-**Barcode input in drawer:** clicking "مسح" opens a text input modal (not camera) where user types the barcode code. Quick-prefix buttons (RNG, BRL, EAR, NKL, FSET, REP) pre-fill the input. On confirm, creates a new "صميت" invoice with the barcode attached, then user assigns employee.
-
-### Date Handling (`src/lib/utils.ts`)
-- `todayISO()` — returns local date as `YYYY-MM-DD` **without UTC conversion** (avoids timezone shift in Saudi Arabia UTC+3)
-- `shiftDate(dateStr, delta)` — adds/subtracts days from a `YYYY-MM-DD` string using local date arithmetic; use this everywhere instead of `new Date(...).toISOString()` for day navigation
-- **Never use** `new Date(dateStr + "T00:00:00").toISOString().split("T")[0]` for date navigation — this causes UTC offset bugs
+- Custom rows use keys `custom_<timestamp>`; values in `DailyDrawer.customFields`
+- Stored in `AppSetting` key `"drawerTemplate"`; admin edits in `/admin` → "قالب اليومية" tab
 
 ### User Preferences (`src/lib/userPrefs.tsx`)
-- Client-side context stored in `localStorage` under key `"mudhian-prefs"`
-- Prefs: `theme: "light" | "dark"`, `numberFormat: "comma" | "comma-decimal" | "plain"`, `numberLang: "en" | "ar"`
-- `UserPrefsProvider` wraps the layout — reads localStorage on mount, applies `.dark` class to `<html>` for dark mode
-- `useFormatCurrency()` hook — returns `(amount: number) => string` respecting current prefs
-- **All money display in ALL pages must use `useFormatCurrency()` hook** — never the raw `formatCurrency` from `utils.ts` (which is hardcoded en-US and ignores user prefs)
-- `formatAmount(amount, format, lang)` — the pure function (non-hook) for formatting
+- `useFormatCurrency()` hook — **use for ALL money display in ALL pages**; never raw `formatCurrency` from utils
+- `const toast = useToast()` — returns the context value directly; do NOT destructure as `{ toast }`
+- Prefs: `theme`, `numberFormat`, `numberLang` — stored in localStorage `"mudhian-prefs"`
+
+### Date Handling (`src/lib/utils.ts`)
+- `todayISO()` — local `YYYY-MM-DD` without UTC conversion (Saudi Arabia UTC+3)
+- `shiftDate(dateStr, delta)` — date arithmetic in local time; use everywhere for navigation
+- **Never** use `new Date(dateStr + "T00:00:00").toISOString().split("T")[0]` — causes UTC offset bugs
 
 ### UI Design System
-The app uses a modern card-based design with a soft lavender-gray background (`#edf1f8`).
+Background `#edf1f8`, navy primary `#1e3a5f`.
 
-**Shared constants** — define at the top of each page component:
 ```typescript
+// Define at top of every page component:
 const CARD = "bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] overflow-hidden";
 const CARD_HDR = "px-5 py-4 flex items-center gap-3";
 ```
 
-**Key conventions:**
-- Cards: white background, `rounded-2xl`, `shadow-[0_4px_24px_rgba(30,58,95,0.08)]`, **no border**
-- Card headers: soft gradient background `linear-gradient(135deg, #f8faff, #f0f4fb)` with icon + bold title
-- Stat/metric cards: rich gradient backgrounds (emerald, blue, violet, rose) with white text
-- Navy blue primary: `#1e3a5f` — use `var(--navy)` or `bg-navy` (defined in `globals.css`)
-- Inputs: borderless (`border-0`), `bg-slate-50`, `rounded-xl`, `focus:ring-2 focus:ring-blue-300`
-- Use `border-slate-*` color scale (not `border-gray-*`) consistently
-- No per-component `dark:` Tailwind classes — dark mode handled globally in `globals.css` via `.dark .bg-white { ... }` overrides
-
-**CSS utilities defined in `globals.css`:**
-- `.bg-navy` — `background-color: var(--navy)`
-- `.print-only` — hidden on screen, shown in print
-- `.no-print` — visible on screen, hidden in print
-- `.card` / `.card-hover` — floating card with `var(--shadow-card)`
-- `.pb-safe` / `.pt-safe` / `.bottom-nav-safe` — safe area insets for iPhone notch/home bar
-- Mobile native feel: `input` font-size forced ≥ 16px (prevents iOS zoom), `overscroll-behavior-y: none`, `-webkit-tap-highlight-color: transparent`
-
-### PWA (`public/manifest.json`, `next.config.ts`)
-- `next-pwa` wraps the Next.js config — generates a Workbox service worker on production build
-- PWA is **disabled in development** (`disable: process.env.NODE_ENV === "development"`)
-- App icons in `public/icons/` — generated by `node scripts/generate-icons.js` (uses `sharp`)
-- Manifest: `display: standalone`, `theme_color: #1e3a5f`, RTL Arabic
+- Cards: white, `rounded-2xl`, shadow above, **no border**
+- Card headers: `linear-gradient(135deg, #f8faff, #f0f4fb)` + icon + bold title
+- Stat cards: rich gradient (emerald/blue/violet/rose/amber) with white text
+- Inputs: `border-0 bg-slate-50 rounded-xl focus:ring-2 focus:ring-blue-300`
+- Use `border-slate-*` (not `border-gray-*`)
+- **No per-component `dark:` Tailwind classes** — dark mode via `.dark .bg-white { ... }` in `globals.css`
+- Mobile: stacked cards on mobile, table/grid on desktop (`md:grid`, `hidden md:table-*`)
+- Bottom nav adds 80px padding — `main` uses `pb-20 sm:pb-5`
 
 ### NavBar (`src/components/NavBar.tsx`)
-- On mobile (< sm): shows hamburger `☰` → full-width dropdown menu
-- **Fixed bottom navigation bar** (sm:hidden) renders below the navbar for mobile users — role-aware links
-- `main` in layout has `pb-20 sm:pb-5` to clear the bottom nav on mobile
-- Toast notifications via `ToastProvider` / `useToast()` hook (`src/components/Toast.tsx`) — wraps layout, provides `toast.success()`, `toast.error()`, `toast.info()`
+- Desktop: horizontal links per role
+- Mobile: hamburger dropdown + fixed bottom nav bar (role-aware)
+- Admin links include: Dashboard, Reports, Admin panel, Inventory, POS, Repairs, Customers, **الموردون** (`/suppliers`), **تحويلات المخزون** (`/stock-transfers`)
 
-### Drawer Page Layout (`src/app/branch/[id]/drawer/page.tsx`)
-The page renders two completely separate trees:
+### API Routes
 
-1. **Screen layout** (`no-print` div) — stacked cards:
-   - Top bar (date navigation + action buttons)
-   - Branch header (navy gradient, branch name, date)
-   - 3 sales metric cards: إجمالي المبيعات (editable) | قيمة الموازنة (editable) | مبيعات كاش (computed gradient)
-   - 2-column grid: الأصناف المباعة | التحويلات البنكية (with add/delete bank)
-   - حساب الرصيد الدفتري (template-driven rows + navy gradient book balance)
-   - 2-column grid: الرصيد الفعلي (editable) | العجز/الزيادة (colored gradient)
-   - ملاحظات اليومية (dynamic add/delete notes)
-   - **تفاصيل الفواتير** (invoice list — reference only, does not affect calculations)
-   - **Invoice mismatch alert** — amber warning shown if `invoiceTotal ≠ totalSales`, green badge if they match. Both only appear when `invoices.length > 0` and `totalSales > 0`.
+**Auth:** `POST /api/auth/login|logout`, `GET /api/auth/me`, `PATCH /api/auth/password`
 
-**Mobile layout:** bank transfers render as stacked cards on mobile (`md:hidden` / `hidden md:grid`). Invoice rows similarly stack on mobile. Bottom nav adds 80px of bottom padding on mobile.
+**Branches/Users:** `GET|POST /api/branches`, `PATCH|DELETE /api/branches/[id]`, `GET|POST /api/viewers`, `DELETE /api/viewers/[id]`, `GET|POST /api/branches/[id]/employees`, `PATCH|DELETE /api/branches/[id]/employees/[empId]`
 
-2. **Print layout** (`print-only` div) — compact A4 single-page table layout with all the same data including invoices, using inline styles so it is unaffected by Tailwind and renders correctly across browsers. Print settings: `@page { size: A4 portrait; margin: 0.8cm }`.
+**Drawer:** `GET /api/drawer?branchId=X&date=YYYY-MM-DD`, `PATCH /api/drawer/[id]`, `POST|DELETE /api/drawer/[id]/banks/[bankId]`, `POST|PATCH|DELETE /api/drawer/[id]/invoices/[invoiceId]`
 
-### Dark Mode
-- Tailwind v4 dark variant defined in `globals.css`: `@custom-variant dark (&:where(.dark, .dark *));`
-- CSS custom properties in `:root` and `.dark`: `--navy`, `--background`, `--foreground`, `--card`, `--border`, etc.
-- Dark mode overrides via `.dark .bg-white { ... }` etc. in `globals.css` — no per-component `dark:` classes needed
+**Inventory:** `GET|POST /api/inventory`, `GET|PATCH|DELETE /api/inventory/[sku]`
 
-### API Routes (`src/app/api/`)
-**Auth:**
-- `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, `PATCH /api/auth/password`
+**POS:** `GET|POST /api/pos`, `GET|PATCH /api/pos/[id]` — PATCH supports `{ action: "refund", reason? }`
 
-**Branches & Users:**
-- `GET/POST /api/branches`, `PATCH/DELETE /api/branches/[id]`
-- `GET/POST /api/viewers`, `DELETE /api/viewers/[id]`
+**Repairs:** `GET|POST /api/repairs`, `GET|PATCH /api/repairs/[id]`, `POST /api/repairs/[id]/status`
 
-**Drawer:**
-- `GET /api/drawer?branchId=X&date=YYYY-MM-DD` — get or create drawer (includes `branch`, `soldItems`, `bankTransfers`, `invoices`)
-- `PATCH /api/drawer/[id]` — update drawer fields + sold items + bank transfers + notes + customFields + `isLocked`
-- `POST /api/drawer/[id]/banks` — add a new bank transfer row
-- `DELETE /api/drawer/[id]/banks/[bankId]` — delete a bank transfer row
-- `POST /api/drawer/[id]/invoices` — add a new invoice (`{ type: "صميت"|"عادية" }`)
-- `PATCH /api/drawer/[id]/invoices/[invoiceId]` — update invoice fields
-- `DELETE /api/drawer/[id]/invoices/[invoiceId]` — delete an invoice
+**Customers:** `GET|POST /api/customers`, `GET|PATCH /api/customers/[id]`
 
-**Admin & Reporting:**
-- `GET /api/dashboard?date=YYYY-MM-DD` — all branches summary (admin + viewer)
-- `GET /api/archive?branchId=X&year=Y&month=M` — monthly drawer list
-- `GET /api/reports/monthly` — sold items + bank totals by branch/category
-- `GET /api/audit?page=N&limit=30` — paginated audit log (admin only)
-- `GET /api/backup` — download SQLite file (admin only)
-- `GET/PATCH /api/settings?key=X` — read any AppSetting (auth required) / write (admin only)
-- `GET /api/seed` — create admin account (one-time setup)
-- `GET/POST /api/branches/[id]/employees` — list/add employees for a branch
-- `PATCH/DELETE /api/branches/[id]/employees/[empId]` — rename or toggle active status
+**Suppliers:** `GET|POST /api/suppliers`, `GET|PATCH|DELETE /api/suppliers/[id]`
+
+**Stock Transfers:** `GET|POST /api/stock-transfers`, `GET|PATCH /api/stock-transfers/[id]` — PATCH supports `{ action: "complete" | "cancel" }`
+
+**Metal Prices:** `GET|POST /api/metal-prices`
+
+**Reports:** `GET /api/reports/monthly`, `GET /api/reports/inventory`, `GET /api/reports/sales`, `GET /api/reports/repairs`, `GET /api/reports/profit?year=Y&month=M&branchId=X`, `GET /api/reports/consolidated?date=YYYY-MM-DD`
+
+**System:** `GET /api/dashboard?date=YYYY-MM-DD`, `GET /api/archive?branchId=X&year=Y&month=M`, `GET /api/audit`, `GET /api/backup`, `GET|PATCH /api/settings`, `GET /api/seed`
 
 ### Pages
 - `/login` — public
-- `/` — redirects by role
-- `/dashboard` — admin/viewer: gradient stat cards + all branches summary table
-- `/admin` — admin: branches, viewer accounts, audit log, journal template editor, employees (5 tabs — tab bar is horizontally scrollable on mobile)
-- `/reports` — admin/viewer: monthly reports with category comparison + bank breakdown
-- `/settings` — all users: theme, number format, number language preferences
-- `/branch/[id]/drawer` — daily journal (date-navigable, template-driven rows, dynamic notes, add/delete banks, invoice list, lock/unlock, print to A4)
-- `/branch/[id]/archive` — monthly archive list
+- `/dashboard` — consolidated view: journal totals + POS + repairs + inventory; date navigator
+- `/admin` — 6 tabs: branches, viewers, audit, template, employees, **أسعار المعادن**
+- `/reports` — tabs: monthly journal, inventory, sales, repairs, **الأرباح** (profit/margin)
+- `/settings` — theme, number format, number language
+- `/branch/[id]/drawer` — daily journal with POS summary card + POS badge on INV- invoices
+- `/branch/[id]/archive` — monthly archive
+- `/inventory` — jewelry item list; `/inventory/new`; `/inventory/[sku]` (edit + supplier dropdown)
+- `/pos` — POS scanner + cart; `/pos/sale/[id]` (detail + refund button)
+- `/repairs` — repair tickets; `/repairs/new`; `/repairs/[id]` (edit + status advance)
+- `/customers` — customer list + search; `/customers/[id]` (history: sales + repairs + stats)
+- `/suppliers` — admin only: supplier CRUD with active/inactive filter
+- `/stock-transfers` — admin only: create transfers (SKU scanner input), complete/cancel
 
 ### Key Invariants
-- `bookBalance` from the API (`drawer.bookBalance`) is the stored value — dashboard/archive/reports use it directly; do NOT recompute from individual fields in API routes
+- `bookBalance` is stored by the API as-is from the frontend — never recompute in API routes
 - `balanceValue` is always manually entered — never auto-summed from bank transfers
-- Invoice totals are display-only — they have no effect on `bookBalance` or any calculation
-- The PATCH API for drawers does not need the template to save — it stores whatever the frontend sends; the frontend applies the template
-- Invoice updates go through `/invoices/[id]` sub-routes, not through the main drawer PATCH
-- `AuditLog` entries are written via `src/lib/audit.ts` `logAction()` — call it silently (no await needed for non-critical paths)
-- Locked drawers (`isLocked: true`) are read-only for branch users and viewers; only admin can unlock via PATCH `{ isLocked: false }`; all invoice sub-routes enforce the same lock check
+- Invoice totals are display-only — no effect on calculations
+- POS refund uses `[مرتجع]` prefix in `Sale.notes` as the refunded marker (no separate status field)
+- `AuditLog` via `logAction()` in `src/lib/audit.ts` — call silently (no await needed)
+- Locked drawers: read-only for branch/viewer; admin can unlock; POS sync skips locked drawers
+- StockTransfer complete: moves JewelryItems to toBranch + sets status=available; cancel: restores to available
 
 ## Initial Setup (New Installation)
 1. `npm install`
-2. `npx prisma migrate dev --name init`
-3. `npx prisma generate`
-4. `npm run dev`
-5. Visit `http://localhost:3000/api/seed` to create admin account
-6. Login as `admin` / `admin123` and go to `/admin` to create branches
+2. Set `DATABASE_URL` in `.env` (PostgreSQL connection string)
+3. Place `ca-certificate.crt` in repo root (DigitalOcean CA cert)
+4. `npx prisma migrate deploy` (production) or `npx prisma migrate dev --name init` (dev)
+5. `npx prisma generate`
+6. `npm run dev`
+7. Visit `http://localhost:3000/api/seed` to create admin account (admin/admin123)
