@@ -5,5 +5,6 @@ export function detectBarcodeType(barcode: string): string {
   if (b.startsWith("NKL") || b.startsWith("PND")) return "عقد";
   if (b.startsWith("EAR"))  return "حلق";
   if (b.startsWith("FSET")) return "طقم";
+  if (b.startsWith("REP"))  return "صيانة";
   return "";
 }

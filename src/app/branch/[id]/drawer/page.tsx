@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import {
-  ChevronLeft, ChevronRight, Save, Printer, CheckCircle, Lock, LockOpen,
+  ChevronLeft, ChevronRight, Save, Printer, CheckCircle, Lock, LockOpen, AlertTriangle,
   MessageSquare, X, Plus, Trash2, ShoppingBag, Landmark, Calculator,
   TrendingUp, Banknote, Wallet, Receipt, Share2, Camera,
 } from "lucide-react";
@@ -833,6 +833,25 @@ function DrawerContent() {
           </div>
         )}
 
+        {/* Mismatch alert: total sales vs invoice total */}
+        {invoices.length > 0 && (fields.totalSales ?? 0) > 0 && invoiceTotal !== (fields.totalSales ?? 0) && (
+          <div className="mx-4 mb-3 mt-1 flex items-start gap-2.5 px-4 py-3 rounded-xl" style={{ background: "linear-gradient(135deg, #fffbeb, #fef9ee)", border: "1px solid #fde68a" }}>
+            <AlertTriangle size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-amber-700">إجمالي الفواتير لا يساوي إجمالي المبيعات</p>
+              <p className="text-xs text-amber-500 mt-0.5">
+                المبيعات: {fmt(fields.totalSales ?? 0)} — الفواتير: {fmt(invoiceTotal)} — الفرق: {fmt(Math.abs((fields.totalSales ?? 0) - invoiceTotal))}
+              </p>
+            </div>
+          </div>
+        )}
+        {invoices.length > 0 && (fields.totalSales ?? 0) > 0 && invoiceTotal === (fields.totalSales ?? 0) && (
+          <div className="mx-4 mb-3 mt-1 flex items-center gap-2 px-4 py-2.5 rounded-xl" style={{ background: "linear-gradient(135deg, #f0fdf4, #f7fef9)", border: "1px solid #bbf7d0" }}>
+            <CheckCircle size={14} className="text-emerald-500 flex-shrink-0" />
+            <p className="text-xs font-bold text-emerald-700">إجمالي الفواتير يطابق إجمالي المبيعات ✓</p>
+          </div>
+        )}
+
         {invoices.length > 0 && (
           <div className="hidden md:grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 border-b border-slate-50 gap-2 items-center">
             <span className="text-xs font-bold text-slate-300">#</span>
@@ -1093,7 +1112,7 @@ function DrawerContent() {
             className="w-full text-lg font-mono font-bold text-slate-700 bg-slate-50 border-2 border-slate-200 focus:border-violet-400 rounded-xl px-4 py-3 focus:outline-none text-center tracking-widest mb-4"
           />
           <div className="flex flex-wrap gap-2 mb-4">
-            {["RNG", "BRL", "EAR", "NKL", "FSET"].map((prefix) => (
+            {["RNG", "BRL", "EAR", "NKL", "FSET", "REP"].map((prefix) => (
               <button key={prefix} onClick={() => setBarcodeInput(prefix)}
                 className="text-xs font-bold bg-slate-100 hover:bg-violet-50 hover:text-violet-600 text-slate-500 px-3 py-1.5 rounded-lg transition">
                 {prefix}
