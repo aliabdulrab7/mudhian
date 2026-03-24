@@ -252,23 +252,25 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit flex-wrap">
-        <button onClick={() => setTab("branches")} className={`px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "branches" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
-          الفروع والحسابات
-        </button>
-        <button onClick={() => setTab("viewers")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "viewers" ? "bg-white shadow-sm text-violet-700" : "text-slate-500 hover:text-slate-700"}`}>
-          <Eye size={14} /> المراقبون
-        </button>
-        <button onClick={() => setTab("audit")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "audit" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
-          <ClipboardList size={14} /> سجل التغييرات
-        </button>
-        <button onClick={() => setTab("template")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "template" ? "bg-white shadow-sm text-orange-700" : "text-slate-500 hover:text-slate-700"}`}>
-          <LayoutTemplate size={14} /> قالب اليومية
-        </button>
-        <button onClick={() => setTab("employees")} className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition ${tab === "employees" ? "bg-white shadow-sm text-teal-700" : "text-slate-500 hover:text-slate-700"}`}>
-          <Users size={14} /> الموظفون
-        </button>
+      {/* Tabs — scrollable on mobile */}
+      <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-max min-w-full sm:w-fit">
+          <button onClick={() => setTab("branches")} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "branches" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
+            الفروع
+          </button>
+          <button onClick={() => setTab("viewers")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "viewers" ? "bg-white shadow-sm text-violet-700" : "text-slate-500 hover:text-slate-700"}`}>
+            <Eye size={14} /> المراقبون
+          </button>
+          <button onClick={() => setTab("audit")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "audit" ? "bg-white shadow-sm text-blue-700" : "text-slate-500 hover:text-slate-700"}`}>
+            <ClipboardList size={14} /> السجل
+          </button>
+          <button onClick={() => setTab("template")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "template" ? "bg-white shadow-sm text-orange-700" : "text-slate-500 hover:text-slate-700"}`}>
+            <LayoutTemplate size={14} /> القالب
+          </button>
+          <button onClick={() => setTab("employees")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "employees" ? "bg-white shadow-sm text-teal-700" : "text-slate-500 hover:text-slate-700"}`}>
+            <Users size={14} /> الموظفون
+          </button>
+        </div>
       </div>
 
       {/* Branches Tab */}
@@ -282,31 +284,33 @@ export default function AdminPage() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">اسم الفرع</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">رقم الفرع</th>
-                  <th className="px-4 py-3 text-right font-semibold text-gray-600">اسم المستخدم</th>
-                  <th className="px-4 py-3 w-24"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {branches.map((branch) => (
-                  <tr key={branch.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 font-bold text-gray-800">{branch.name}</td>
-                    <td className="px-4 py-3 text-gray-500">{branch.branchNum || "—"}</td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-xs">{branch.users[0]?.username ?? "—"}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <button onClick={() => openEdit(branch)} className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"><Pencil size={14} /></button>
-                        <button onClick={() => handleDelete(branch.id, branch.name)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition"><Trash2 size={14} /></button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">اسم الفرع</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap hidden sm:table-cell">رقم الفرع</th>
+                    <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">اسم المستخدم</th>
+                    <th className="px-4 py-3 w-24"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {branches.map((branch) => (
+                    <tr key={branch.id} className="border-t border-gray-100 hover:bg-gray-50">
+                      <td className="px-4 py-3.5 font-bold text-gray-800">{branch.name}</td>
+                      <td className="px-4 py-3.5 text-gray-500 hidden sm:table-cell">{branch.branchNum || "—"}</td>
+                      <td className="px-4 py-3.5 text-gray-600 font-mono text-xs">{branch.users[0]?.username ?? "—"}</td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex gap-1">
+                          <button onClick={() => openEdit(branch)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition min-h-[36px] min-w-[36px] flex items-center justify-center"><Pencil size={14} /></button>
+                          <button onClick={() => handleDelete(branch.id, branch.name)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition min-h-[36px] min-w-[36px] flex items-center justify-center"><Trash2 size={14} /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       )}
@@ -326,30 +330,32 @@ export default function AdminPage() {
               <div className="px-4 py-3 bg-violet-50 border-b border-violet-100">
                 <p className="text-xs text-violet-600 font-medium">المراقبون يستطيعون رؤية جميع الفروع والتقارير بدون صلاحية التعديل</p>
               </div>
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-600">اسم المستخدم</th>
-                    <th className="px-4 py-3 text-right font-semibold text-gray-600">تاريخ الإنشاء</th>
-                    <th className="px-4 py-3 w-16"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewers.map((v) => (
-                    <tr key={v.id} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-4 py-3 font-mono text-sm text-violet-700 font-bold">{v.username}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs">
-                        {new Date(v.createdAt).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "2-digit", day: "2-digit" })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <button onClick={() => handleDeleteViewer(v.id, v.username)} className="p-1.5 text-red-400 hover:bg-red-50 rounded-lg transition">
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">اسم المستخدم</th>
+                      <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap hidden sm:table-cell">تاريخ الإنشاء</th>
+                      <th className="px-4 py-3 w-16"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {viewers.map((v) => (
+                      <tr key={v.id} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-3.5 font-mono text-sm text-violet-700 font-bold">{v.username}</td>
+                        <td className="px-4 py-3.5 text-gray-400 text-xs hidden sm:table-cell">
+                          {new Date(v.createdAt).toLocaleDateString("ar-SA-u-nu-latn", { year: "numeric", month: "2-digit", day: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <button onClick={() => handleDeleteViewer(v.id, v.username)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition min-h-[36px] min-w-[36px] flex items-center justify-center">
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
         </div>
@@ -527,56 +533,63 @@ export default function AdminPage() {
                       <button onClick={() => setShowAddEmp(true)} className="mt-3 text-teal-600 hover:underline text-sm">أضف أول موظف</button>
                     </div>
                   ) : (
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 border-b border-gray-200">
-                        <tr>
-                          <th className="px-4 py-3 text-right font-semibold text-gray-600">الاسم</th>
-                          <th className="px-4 py-3 text-right font-semibold text-gray-600">الحالة</th>
-                          <th className="px-4 py-3 w-28"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {employees.map((emp) => (
-                          <tr key={emp.id} className={`border-t border-gray-100 ${!emp.isActive ? "opacity-50 bg-gray-50" : "hover:bg-gray-50"}`}>
-                            <td className="px-4 py-3">
-                              {editEmpId === emp.id ? (
-                                <div className="flex gap-2">
-                                  <input autoFocus type="text" value={editEmpName}
-                                    onChange={(e) => setEditEmpName(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === "Enter") handleRenameEmployee(emp.id, editEmpName);
-                                      if (e.key === "Escape") { setEditEmpId(null); setEditEmpName(""); }
-                                    }}
-                                    className="text-sm border border-teal-300 rounded-xl px-2 py-1 focus:outline-none focus:ring-2 focus:ring-teal-400"
-                                  />
-                                  <button onClick={() => handleRenameEmployee(emp.id, editEmpName)}
-                                    className="text-xs bg-teal-600 text-white px-2 py-1 rounded-lg hover:bg-teal-700">حفظ</button>
-                                  <button onClick={() => { setEditEmpId(null); setEditEmpName(""); }}
-                                    className="text-slate-400 hover:text-slate-600 text-xs px-2 py-1 rounded-lg hover:bg-slate-100">إلغاء</button>
-                                </div>
-                              ) : (
-                                <span className="font-medium text-gray-800">{emp.name}</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${emp.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
-                                {emp.isActive ? "نشط" : "موقوف"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3">
-                              <div className="flex gap-1 justify-end">
-                                <button onClick={() => { setEditEmpId(emp.id); setEditEmpName(emp.name); }}
-                                  className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition"><Pencil size={13} /></button>
-                                <button onClick={() => handleToggleEmployee(emp)}
-                                  className={`p-1.5 rounded-lg transition ${emp.isActive ? "text-red-400 hover:bg-red-50" : "text-emerald-500 hover:bg-emerald-50"}`}>
-                                  {emp.isActive ? <X size={13} /> : <Plus size={13} />}
-                                </button>
-                              </div>
-                            </td>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap">الاسم</th>
+                            <th className="px-4 py-3 text-right font-semibold text-gray-600 whitespace-nowrap hidden sm:table-cell">الحالة</th>
+                            <th className="px-4 py-3 w-28"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {employees.map((emp) => (
+                            <tr key={emp.id} className={`border-t border-gray-100 ${!emp.isActive ? "opacity-50 bg-gray-50" : "hover:bg-gray-50"}`}>
+                              <td className="px-4 py-3.5">
+                                {editEmpId === emp.id ? (
+                                  <div className="flex gap-2 flex-wrap">
+                                    <input autoFocus type="text" value={editEmpName}
+                                      onChange={(e) => setEditEmpName(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleRenameEmployee(emp.id, editEmpName);
+                                        if (e.key === "Escape") { setEditEmpId(null); setEditEmpName(""); }
+                                      }}
+                                      className="text-sm border border-teal-300 rounded-xl px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-teal-400"
+                                    />
+                                    <button onClick={() => handleRenameEmployee(emp.id, editEmpName)}
+                                      className="text-xs bg-teal-600 text-white px-3 py-1.5 rounded-lg hover:bg-teal-700">حفظ</button>
+                                    <button onClick={() => { setEditEmpId(null); setEditEmpName(""); }}
+                                      className="text-slate-400 hover:text-slate-600 text-xs px-2 py-1.5 rounded-lg hover:bg-slate-100">إلغاء</button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium text-gray-800">{emp.name}</span>
+                                    <span className={`sm:hidden text-xs font-bold px-2 py-0.5 rounded-full ${emp.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                                      {emp.isActive ? "نشط" : "موقوف"}
+                                    </span>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5 hidden sm:table-cell">
+                                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${emp.isActive ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                                  {emp.isActive ? "نشط" : "موقوف"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <div className="flex gap-1 justify-end">
+                                  <button onClick={() => { setEditEmpId(emp.id); setEditEmpName(emp.name); }}
+                                    className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition min-h-[36px] min-w-[36px] flex items-center justify-center"><Pencil size={13} /></button>
+                                  <button onClick={() => handleToggleEmployee(emp)}
+                                    className={`p-2 rounded-lg transition min-h-[36px] min-w-[36px] flex items-center justify-center ${emp.isActive ? "text-red-400 hover:bg-red-50" : "text-emerald-500 hover:bg-emerald-50"}`}>
+                                    {emp.isActive ? <X size={13} /> : <Plus size={13} />}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </>
               )}

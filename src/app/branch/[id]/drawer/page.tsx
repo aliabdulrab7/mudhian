@@ -351,13 +351,13 @@ function DrawerContent() {
       {/* ── TOP BAR ────────────────────────────────────────────── */}
       <div className={`${CARD} px-5 py-3.5 flex flex-wrap items-center gap-3 justify-between no-print`}>
         <div className="flex items-center gap-1">
-          <button onClick={() => changeDate(-1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+          <button onClick={() => changeDate(-1)} className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition min-h-[44px] min-w-[44px] flex items-center justify-center">
             <ChevronRight size={16} />
           </button>
           <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)}
             className="text-sm font-semibold text-slate-700 bg-slate-50 border-0 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 cursor-pointer"
           />
-          <button onClick={() => changeDate(1)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition">
+          <button onClick={() => changeDate(1)} className="p-2.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition min-h-[44px] min-w-[44px] flex items-center justify-center">
             <ChevronLeft size={16} />
           </button>
           <button onClick={() => setDate(todayISO())}
@@ -564,8 +564,8 @@ function DrawerContent() {
             </span>
           </div>
 
-          {/* Column headers */}
-          <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] px-4 py-2.5 border-b border-slate-50">
+          {/* Column headers — desktop only */}
+          <div className="hidden md:grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] px-4 py-2.5 border-b border-slate-50">
             {["البنك", "المبلغ", "المستفيد", "ملاحظة", ""].map((h, i) => (
               <span key={i} className={`text-xs font-bold text-slate-300 ${i === 0 ? "text-right" : "text-center"}`}>{h}</span>
             ))}
@@ -573,35 +573,72 @@ function DrawerContent() {
 
           <div className="flex-1">
             {bankTransfers.map((bt, idx) => (
-              <div key={bt.id}
-                className={`grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] px-4 py-2.5 items-center gap-1 border-b border-slate-50 transition-colors hover:bg-blue-50/20 ${idx % 2 === 1 ? "bg-slate-50/30" : ""}`}>
-                <span className="text-xs font-black text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg text-right">{bt.bankName}</span>
-                {canEdit ? (
-                  <input type="number" min="0" value={bt.amount || ""}
-                    onChange={(e) => setBankField(bt.id, "amount", n(e.target.value))}
-                    className="w-full text-center text-xs font-black text-blue-600 bg-transparent focus:bg-blue-50 rounded-lg px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" placeholder="0" />
-                ) : (
-                  <span className="text-center text-xs font-black text-blue-600">{bt.amount ? fmt(bt.amount) : "—"}</span>
-                )}
-                {canEdit ? (
-                  <input type="text" value={bt.beneficiary}
-                    onChange={(e) => setBankField(bt.id, "beneficiary", e.target.value)}
-                    className="w-full text-center text-xs bg-transparent focus:bg-slate-50 rounded-lg px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300 text-slate-500" placeholder="المستفيد" />
-                ) : (
-                  <span className="text-center text-xs text-slate-400">{bt.beneficiary || "—"}</span>
-                )}
-                {canEdit ? (
-                  <input type="text" value={bt.notes}
-                    onChange={(e) => setBankField(bt.id, "notes", e.target.value)}
-                    className="w-full text-center text-xs bg-transparent focus:bg-slate-50 rounded-lg px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300 text-slate-400" placeholder="ملاحظة" />
-                ) : (
-                  <span className="text-center text-xs text-slate-400">{bt.notes || "—"}</span>
-                )}
-                {canEdit ? (
-                  <button onClick={() => deleteBank(bt.id)} className="text-slate-200 hover:text-red-400 transition p-1 rounded-lg hover:bg-red-50">
-                    <Trash2 size={11} />
-                  </button>
-                ) : <span />}
+              <div key={bt.id} className={`border-b border-slate-50 transition-colors ${idx % 2 === 1 ? "bg-slate-50/30" : ""}`}>
+                {/* Desktop layout */}
+                <div className="hidden md:grid grid-cols-[1.2fr_1fr_1fr_1fr_auto] px-4 py-2.5 items-center gap-1 hover:bg-blue-50/20">
+                  <span className="text-xs font-black text-slate-600 bg-slate-100 px-2.5 py-1.5 rounded-lg text-right">{bt.bankName}</span>
+                  {canEdit ? (
+                    <input type="number" min="0" value={bt.amount || ""}
+                      onChange={(e) => setBankField(bt.id, "amount", n(e.target.value))}
+                      className="w-full text-center text-xs font-black text-blue-600 bg-transparent focus:bg-blue-50 rounded-lg px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300" placeholder="0" />
+                  ) : (
+                    <span className="text-center text-xs font-black text-blue-600">{bt.amount ? fmt(bt.amount) : "—"}</span>
+                  )}
+                  {canEdit ? (
+                    <input type="text" value={bt.beneficiary}
+                      onChange={(e) => setBankField(bt.id, "beneficiary", e.target.value)}
+                      className="w-full text-center text-xs bg-transparent focus:bg-slate-50 rounded-lg px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300 text-slate-500" placeholder="المستفيد" />
+                  ) : (
+                    <span className="text-center text-xs text-slate-400">{bt.beneficiary || "—"}</span>
+                  )}
+                  {canEdit ? (
+                    <input type="text" value={bt.notes}
+                      onChange={(e) => setBankField(bt.id, "notes", e.target.value)}
+                      className="w-full text-center text-xs bg-transparent focus:bg-slate-50 rounded-lg px-1 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300 text-slate-400" placeholder="ملاحظة" />
+                  ) : (
+                    <span className="text-center text-xs text-slate-400">{bt.notes || "—"}</span>
+                  )}
+                  {canEdit ? (
+                    <button onClick={() => deleteBank(bt.id)} className="text-slate-200 hover:text-red-400 transition p-1 rounded-lg hover:bg-red-50">
+                      <Trash2 size={11} />
+                    </button>
+                  ) : <span />}
+                </div>
+
+                {/* Mobile stacked card layout */}
+                <div className="md:hidden px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-black text-slate-700">{bt.bankName}</span>
+                    {canEdit && (
+                      <button onClick={() => deleteBank(bt.id)} className="text-slate-200 hover:text-red-400 transition p-1.5 rounded-lg hover:bg-red-50 min-h-[36px] min-w-[36px] flex items-center justify-center">
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {canEdit ? (
+                      <input type="number" min="0" value={bt.amount || ""}
+                        onChange={(e) => setBankField(bt.id, "amount", n(e.target.value))}
+                        className="text-center text-sm font-black text-blue-600 bg-slate-100 rounded-xl px-2 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-blue-50 border-0" placeholder="المبلغ" />
+                    ) : (
+                      <span className="text-center text-sm font-black text-blue-600 bg-slate-100 rounded-xl px-2 py-2.5">{bt.amount ? fmt(bt.amount) : "—"}</span>
+                    )}
+                    {canEdit ? (
+                      <input type="text" value={bt.beneficiary}
+                        onChange={(e) => setBankField(bt.id, "beneficiary", e.target.value)}
+                        className="text-center text-sm bg-slate-100 rounded-xl px-2 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-white text-slate-600 border-0" placeholder="المستفيد" />
+                    ) : (
+                      <span className="text-center text-sm text-slate-400 bg-slate-100 rounded-xl px-2 py-2.5">{bt.beneficiary || "—"}</span>
+                    )}
+                    {canEdit ? (
+                      <input type="text" value={bt.notes}
+                        onChange={(e) => setBankField(bt.id, "notes", e.target.value)}
+                        className="text-center text-sm bg-slate-100 rounded-xl px-2 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-300 focus:bg-white text-slate-500 border-0" placeholder="ملاحظة" />
+                    ) : (
+                      <span className="text-center text-sm text-slate-400 bg-slate-100 rounded-xl px-2 py-2.5">{bt.notes || "—"}</span>
+                    )}
+                  </div>
+                </div>
               </div>
             ))}
           </div>
@@ -797,7 +834,7 @@ function DrawerContent() {
         )}
 
         {invoices.length > 0 && (
-          <div className="grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 border-b border-slate-50 gap-2 items-center min-w-[480px]">
+          <div className="hidden md:grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 border-b border-slate-50 gap-2 items-center">
             <span className="text-xs font-bold text-slate-300">#</span>
             <span className="text-xs font-bold text-slate-300">النوع</span>
             <span className="text-xs font-bold text-slate-300">رقم الفاتورة</span>
@@ -807,7 +844,7 @@ function DrawerContent() {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        <div>
           {invoices.map((inv, idx) => (
             <InvoiceRow key={inv.id} inv={inv} idx={idx} readOnly={!canEdit}
               employees={employees}
@@ -1255,98 +1292,95 @@ function InvoiceRow({ inv, idx, readOnly, onUpdate, onDelete, employees, fmt, is
     }
   }, [isNew]);
 
+  const typeEl = readOnly ? (
+    <span className={`text-xs font-black px-2 py-1 rounded-lg text-center ${inv.type === "عادية" ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
+      {inv.type}
+    </span>
+  ) : (
+    <select
+      value={inv.type}
+      onChange={(e) => onUpdate({ type: e.target.value as "صميت" | "عادية" })}
+      className="text-xs font-bold bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-700 cursor-pointer"
+    >
+      <option value="عادية">عادية</option>
+      <option value="صميت">صميت</option>
+    </select>
+  );
+
+  const invoiceNumEl = inv.type === "عادية" ? (
+    readOnly ? (
+      <span className="text-xs text-slate-500">{inv.invoiceNum || "—"}</span>
+    ) : (
+      <input type="text" value={localInvoiceNum}
+        onChange={(e) => setLocalInvoiceNum(e.target.value)}
+        onBlur={() => { if (localInvoiceNum !== inv.invoiceNum) onUpdate({ invoiceNum: localInvoiceNum }); }}
+        placeholder="رقم الفاتورة"
+        className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full"
+      />
+    )
+  ) : <span className="text-xs text-slate-200">—</span>;
+
+  const priceEl = readOnly ? (
+    <span className="text-xs font-black text-emerald-600">{inv.price ? fmt(inv.price) : "—"}</span>
+  ) : (
+    <input type="number" min="0" step="1" value={localPrice}
+      onChange={(e) => setLocalPrice(e.target.value)}
+      onBlur={() => { const val = parseFloat(localPrice) || 0; if (val !== inv.price) onUpdate({ price: val }); }}
+      placeholder="0"
+      className="text-xs font-black text-emerald-600 bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 w-full"
+    />
+  );
+
+  const empEl = readOnly ? (
+    <span className="text-xs text-slate-500">{inv.employeeName || "—"}</span>
+  ) : (
+    <select ref={empSelectRef}
+      value={inv.employeeId != null ? String(inv.employeeId) : ""}
+      onChange={(e) => {
+        const selectedId = e.target.value ? parseInt(e.target.value) : null;
+        const selectedName = selectedId != null ? (employees.find((em) => em.id === selectedId)?.name ?? "") : "";
+        onUpdate({ employeeId: selectedId, employeeName: selectedName });
+      }}
+      className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full cursor-pointer"
+    >
+      <option value="">بدون اسم</option>
+      {employees.map((em) => <option key={em.id} value={em.id}>{em.name}</option>)}
+    </select>
+  );
+
+  const deleteBtn = !readOnly ? (
+    <button onClick={onDelete} className="text-slate-200 hover:text-red-400 transition p-2 rounded-lg hover:bg-red-50 min-h-[36px] min-w-[36px] flex items-center justify-center">
+      <Trash2 size={12} />
+    </button>
+  ) : <span />;
+
   return (
-    <div className={`grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 gap-2 items-start border-b border-slate-50 hover:bg-slate-50/40 transition-colors min-w-[480px] ${isNew ? "ring-2 ring-blue-400 animate-pulse rounded-xl bg-blue-50/30" : ""}`}>
-      {/* # */}
-      <span className="text-xs text-slate-300 font-semibold pt-1.5">{idx + 1}</span>
-
-      {/* النوع */}
-      {readOnly ? (
-        <span className={`text-xs font-black px-2 py-1 rounded-lg text-center ${inv.type === "عادية" ? "bg-blue-50 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
-          {inv.type}
-        </span>
-      ) : (
-        <select
-          value={inv.type}
-          onChange={(e) => onUpdate({ type: e.target.value as "صميت" | "عادية" })}
-          className="text-xs font-bold bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-700 cursor-pointer"
-        >
-          <option value="عادية">عادية</option>
-          <option value="صميت">صميت</option>
-        </select>
-      )}
-
-      {/* رقم الفاتورة */}
-      {inv.type === "عادية" ? (
-        readOnly ? (
-          <span className="text-xs text-slate-500 pt-1.5">{inv.invoiceNum || "—"}</span>
-        ) : (
-          <input
-            type="text"
-            value={localInvoiceNum}
-            onChange={(e) => setLocalInvoiceNum(e.target.value)}
-            onBlur={() => { if (localInvoiceNum !== inv.invoiceNum) onUpdate({ invoiceNum: localInvoiceNum }); }}
-            placeholder="رقم الفاتورة"
-            className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full"
-          />
-        )
-      ) : (
-        <span className="text-xs text-slate-200 pt-1.5">—</span>
-      )}
-
-      {/* المبلغ */}
-      {readOnly ? (
-        <span className="text-xs font-black text-emerald-600 pt-1.5">{inv.price ? fmt(inv.price) : "—"}</span>
-      ) : (
-        <input
-          type="number" min="0" step="1"
-          value={localPrice}
-          onChange={(e) => setLocalPrice(e.target.value)}
-          onBlur={() => {
-            const val = parseFloat(localPrice) || 0;
-            if (val !== inv.price) onUpdate({ price: val });
-          }}
-          placeholder="0"
-          className="text-xs font-black text-emerald-600 bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 w-full"
-        />
-      )}
-
-      {/* الموظف + الباركودات */}
-      <div className="flex flex-col gap-1.5 min-w-0">
-        {readOnly ? (
-          <span className="text-xs text-slate-500">{inv.employeeName || "—"}</span>
-        ) : (
-          <select
-            ref={empSelectRef}
-            value={inv.employeeId != null ? String(inv.employeeId) : ""}
-            onChange={(e) => {
-              const selectedId = e.target.value ? parseInt(e.target.value) : null;
-              const selectedName = selectedId != null
-                ? (employees.find((em) => em.id === selectedId)?.name ?? "")
-                : "";
-              onUpdate({ employeeId: selectedId, employeeName: selectedName });
-            }}
-            className="text-xs bg-slate-50 rounded-xl px-2 py-1.5 border-0 focus:outline-none focus:ring-2 focus:ring-blue-300 text-slate-600 w-full cursor-pointer"
-          >
-            <option value="">بدون اسم</option>
-            {employees.map((em) => (
-              <option key={em.id} value={em.id}>{em.name}</option>
-            ))}
-          </select>
-        )}
-        <BarcodeTagInput
-          barcodes={inv.barcodes}
-          onChange={(updated) => onUpdate({ barcodes: updated })}
-          readOnly={readOnly}
-        />
+    <div className={`border-b border-slate-50 ${isNew ? "ring-2 ring-blue-400 animate-pulse bg-blue-50/30 rounded-xl" : ""}`}>
+      {/* Desktop layout */}
+      <div className="hidden md:grid grid-cols-[28px_80px_100px_110px_1fr_32px] px-4 py-2.5 gap-2 items-start hover:bg-slate-50/40 transition-colors">
+        <span className="text-xs text-slate-300 font-semibold pt-1.5">{idx + 1}</span>
+        {typeEl}
+        {invoiceNumEl}
+        {priceEl}
+        <div className="flex flex-col gap-1.5 min-w-0">
+          {empEl}
+          <BarcodeTagInput barcodes={inv.barcodes} onChange={(updated) => onUpdate({ barcodes: updated })} readOnly={readOnly} />
+        </div>
+        {deleteBtn}
       </div>
 
-      {/* حذف */}
-      {!readOnly ? (
-        <button onClick={onDelete} className="text-slate-200 hover:text-red-400 transition p-1 rounded-lg hover:bg-red-50 mt-0.5">
-          <Trash2 size={11} />
-        </button>
-      ) : <span />}
+      {/* Mobile stacked layout */}
+      <div className="md:hidden px-4 py-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs text-slate-300 font-semibold">{idx + 1}</span>
+          {typeEl}
+          <div className="flex-1">{invoiceNumEl}</div>
+          <div className="w-24">{priceEl}</div>
+          {deleteBtn}
+        </div>
+        <div className="mb-1.5">{empEl}</div>
+        <BarcodeTagInput barcodes={inv.barcodes} onChange={(updated) => onUpdate({ barcodes: updated })} readOnly={readOnly} />
+      </div>
     </div>
   );
 }

@@ -1,8 +1,16 @@
 import type { NextConfig } from "next";
+// @ts-expect-error next-pwa lacks TS types
+import withPWA from "next-pwa";
 
-const nextConfig: NextConfig = {
-  /* config options here */
+const baseConfig: NextConfig = {
   reactCompiler: true,
+  // Allow Turbopack to coexist with next-pwa's webpack config
+  turbopack: {},
 };
 
-export default nextConfig;
+export default withPWA({
+  dest: "public",
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === "development",
+})(baseConfig);
