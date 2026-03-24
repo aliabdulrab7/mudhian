@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useCallback, useRef, Suspense } from "react";
+import React, { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import {
   ChevronLeft, ChevronRight, Save, Printer, CheckCircle, Lock, LockOpen, AlertTriangle,
@@ -1165,10 +1165,10 @@ function DrawerContent() {
                 {invoicesSamit.length} — {fmt(invoicesSamit.reduce((s, i) => s + i.price, 0))}
               </td>
               {Object.entries(invoiceCategoryMap).map(([cat, count]) => (
-                <>
-                  <td key={`th-${cat}`} style={th({ width: "60px" })}>{cat}</td>
-                  <td key={`td-${cat}`} style={{ ...td(), fontWeight: "700", width: "50px" }}>{count}</td>
-                </>
+                <React.Fragment key={cat}>
+                  <td style={th({ width: "60px" })}>{cat}</td>
+                  <td style={{ ...td(), fontWeight: "700", width: "50px" }}>{count}</td>
+                </React.Fragment>
               ))}
             </tr>
           </tbody>
