@@ -5,7 +5,7 @@ const globalForPrisma = globalThis as unknown as { prisma: PrismaClient; prismaV
 
 // Schema version tag — bump this whenever you run `prisma migrate dev`
 // to force the singleton to recreate after a schema change in dev.
-const SCHEMA_VERSION = "v6_supplier_transfer";
+const SCHEMA_VERSION = "v7_accounting_diamonds";
 
 function createPrisma() {
   // Strip sslmode from the URL so we can set SSL options programmatically.

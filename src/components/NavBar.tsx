@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LogOut, LayoutDashboard, BookOpen, Archive, Settings, BarChart3,
   SlidersHorizontal, Menu, X, Package, ShoppingCart, Wrench, Users,
-  Building2, ArrowLeftRight,
+  Building2, ArrowLeftRight, Landmark,
 } from "lucide-react";
 import type { SessionUser } from "@/lib/auth";
 
@@ -44,6 +44,7 @@ export default function NavBar() {
     { href: "/customers", icon: <Users size={16} />, label: "العملاء" },
     { href: "/suppliers", icon: <Building2 size={16} />, label: "الموردون" },
     { href: "/stock-transfers", icon: <ArrowLeftRight size={16} />, label: "تحويلات المخزون" },
+    { href: "/accounting", icon: <Landmark size={16} />, label: "المحاسبة" },
     { href: "/reports", icon: <BarChart3 size={16} />, label: "التقارير" },
     { href: "/admin", icon: <Settings size={16} />, label: "الإدارة" },
   ] : user.role === "viewer" ? [

@@ -24,7 +24,7 @@ interface AuditEntry {
 
 interface Viewer { id: number; username: string; createdAt: string; }
 interface Employee { id: number; name: string; isActive: boolean; createdAt: string; }
-type Tab = "branches" | "viewers" | "audit" | "template" | "employees" | "metalPrices";
+type Tab = "branches" | "viewers" | "audit" | "template" | "employees" | "metalPrices" | "invoiceSettings";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("branches");
@@ -77,6 +77,13 @@ export default function AdminPage() {
   const [editEmpId, setEditEmpId] = useState<number | null>(null);
   const [editEmpName, setEditEmpName] = useState("");
 
+  // Invoice Settings
+  const [invoiceSettings, setInvoiceSettings] = useState({
+    storeVatNumber: "", storePhone: "", storeAddress: "", storeManager: "",
+  });
+  const [invoiceSettingsSaving, setInvoiceSettingsSaving] = useState(false);
+  const [invoiceSettingsSaved, setInvoiceSettingsSaved] = useState(false);
+
   const fetchBranches = useCallback(async () => {
     const res = await fetch("/api/branches");
     setBranches(await res.json());
@@ -108,6 +115,36 @@ export default function AdminPage() {
       setTemplate(parseTemplate(data.value));
     }
   }, []);
+
+  const fetchInvoiceSettings = useCallback(async () => {
+    const keys = ["storeVatNumber", "storePhone", "storeAddress", "storeManager"];
+    const results = await Promise.all(
+      keys.map((k) => fetch(`/api/settings?key=${k}`).then((r) => (r.ok ? r.json() : { key: k, value: "" })))
+    );
+    const map = Object.fromEntries(results.map((r: { key: string; value: string }) => [r.key, r.value || ""]));
+    setInvoiceSettings({
+      storeVatNumber: map.storeVatNumber,
+      storePhone: map.storePhone,
+      storeAddress: map.storeAddress,
+      storeManager: map.storeManager,
+    });
+  }, []);
+
+  const saveInvoiceSettings = async () => {
+    setInvoiceSettingsSaving(true);
+    await Promise.all(
+      Object.entries(invoiceSettings).map(([key, value]) =>
+        fetch("/api/settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key, value }),
+        })
+      )
+    );
+    setInvoiceSettingsSaving(false);
+    setInvoiceSettingsSaved(true);
+    setTimeout(() => setInvoiceSettingsSaved(false), 2500);
+  };
 
   const fetchMetalPrices = useCallback(async () => {
     const res = await fetch("/api/metal-prices?metalType=all&limit=30");
@@ -159,6 +196,7 @@ export default function AdminPage() {
   useEffect(() => { if (tab === "audit") fetchAudit(1); }, [tab, fetchAudit]);
   useEffect(() => { if (tab === "template") fetchTemplate(); }, [tab, fetchTemplate]);
   useEffect(() => { if (tab === "metalPrices") fetchMetalPrices(); }, [tab, fetchMetalPrices]);
+  useEffect(() => { if (tab === "invoiceSettings") fetchInvoiceSettings(); }, [tab, fetchInvoiceSettings]);
   useEffect(() => {
     if (tab === "employees" && empBranchId !== "") fetchEmployees(empBranchId as number);
   }, [tab, empBranchId, fetchEmployees]);
@@ -308,6 +346,9 @@ export default function AdminPage() {
           </button>
           <button onClick={() => setTab("metalPrices")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "metalPrices" ? "bg-white shadow-sm text-yellow-700" : "text-slate-500 hover:text-slate-700"}`}>
             <TrendingUp size={14} /> أسعار المعادن
+          </button>
+          <button onClick={() => setTab("invoiceSettings")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition whitespace-nowrap ${tab === "invoiceSettings" ? "bg-white shadow-sm text-rose-700" : "text-slate-500 hover:text-slate-700"}`}>
+            إعدادات الفاتورة
           </button>
         </div>
       </div>
@@ -722,6 +763,53 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Settings Tab */}
+      {tab === "invoiceSettings" && (
+        <div className="bg-white rounded-2xl shadow-[0_4px_24px_rgba(30,58,95,0.08)] overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100" style={{ background: "linear-gradient(135deg, #f8faff, #f0f4fb)" }}>
+            <h2 className="font-bold text-slate-700 text-sm">إعدادات رأس الفاتورة</h2>
+            <p className="text-xs text-slate-400 mt-0.5">تظهر هذه المعلومات في رأس كل فاتورة مبيعات مطبوعة</p>
+          </div>
+          <div className="p-5 space-y-4">
+            <Field
+              label="الرقم الضريبي (VAT Number)"
+              value={invoiceSettings.storeVatNumber}
+              onChange={(v) => setInvoiceSettings((s) => ({ ...s, storeVatNumber: v }))}
+              placeholder="3XXXXXXXXXX"
+            />
+            <Field
+              label="رقم الهاتف"
+              value={invoiceSettings.storePhone}
+              onChange={(v) => setInvoiceSettings((s) => ({ ...s, storePhone: v }))}
+              placeholder="+966 XX XXX XXXX"
+            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">العنوان</label>
+              <textarea
+                value={invoiceSettings.storeAddress}
+                onChange={(e) => setInvoiceSettings((s) => ({ ...s, storeAddress: e.target.value }))}
+                rows={3}
+                placeholder="المدينة، الحي، الشارع..."
+                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              />
+            </div>
+            <Field
+              label="اسم المدير (للتوقيع)"
+              value={invoiceSettings.storeManager}
+              onChange={(v) => setInvoiceSettings((s) => ({ ...s, storeManager: v }))}
+              placeholder="اسم المدير المسؤول"
+            />
+            <button
+              onClick={saveInvoiceSettings}
+              disabled={invoiceSettingsSaving}
+              className="w-full py-2.5 rounded-xl font-bold text-sm bg-rose-600 text-white hover:bg-rose-700 transition disabled:opacity-50"
+            >
+              {invoiceSettingsSaving ? "جاري الحفظ..." : invoiceSettingsSaved ? "✓ تم الحفظ" : "حفظ الإعدادات"}
+            </button>
           </div>
         </div>
       )}

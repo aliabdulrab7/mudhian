@@ -23,6 +23,7 @@ model Branch {
   repairs       Repair[]
   transfersFrom StockTransfer[] @relation("TransferFrom")
   transfersTo   StockTransfer[] @relation("TransferTo")
+  diamonds      DiamondStone[]
 }
 
 model User {
@@ -252,6 +253,7 @@ model SaleItem {
   jewelryItem   JewelryItem @relation(fields: [jewelryItemId], references: [id])
   price         Float       // لقطة من سعر البيع وقت البيع
   discount      Float       @default(0)
+  costAtSale    Float       @default(0) // تكلفة القطعة وقت البيع (للمحاسبة)
 }
 
 // الصيانة والإصلاح
@@ -306,6 +308,7 @@ model Supplier {
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   jewelryItems JewelryItem[]
+  diamonds     DiamondStone[]
 }
 
 // ==================== تحويلات المخزون ====================
@@ -334,4 +337,89 @@ model StockTransferItem {
   transfer      StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
   jewelryItemId Int
   jewelryItem   JewelryItem   @relation(fields: [jewelryItemId], references: [id])
+}
+
+// ==================== المحاسبة المزدوجة (Double-Entry GL) ====================
+
+// دليل الحسابات
+model Account {
+  id         Int           @id @default(autoincrement())
+  code       String        @unique       // e.g. "1011"
+  nameAr     String                      // الاسم بالعربي
+  nameEn     String        @default("")  // English name
+  type       String                      // asset | liability | equity | revenue | expense
+  parentCode String        @default("")  // كود الحساب الأب
+  isActive   Boolean       @default(true)
+  notes      String        @default("")
+  createdAt  DateTime      @default(now())
+
+  journalLines JournalLine[]
+
+  @@index([type])
+  @@index([parentCode])
+}
+
+// قيود اليومية
+model JournalEntry {
+  id          Int           @id @default(autoincrement())
+  entryNum    String        @unique          // JE-YYYYMMDD-NNNN
+  date        DateTime      @db.Date
+  description String        @default("")
+  ref         String        @default("")     // رقم الفاتورة أو مرجع القيد
+  type        String        @default("manual") // manual | sale | refund | purchase | payroll
+  status      String        @default("posted") // draft | posted | void
+  branchId    Int?
+  postedBy    Int                              // userId
+  createdAt   DateTime      @default(now())
+
+  lines JournalLine[]
+
+  @@index([date])
+  @@index([ref])
+  @@index([type])
+  @@index([branchId])
+}
+
+// بنود القيد
+model JournalLine {
+  id          Int          @id @default(autoincrement())
+  entryId     Int
+  entry       JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId   Int
+  account     Account      @relation(fields: [accountId], references: [id])
+  debit       Float        @default(0)
+  credit      Float        @default(0)
+  description String       @default("")
+  branchId    Int?
+
+  @@index([entryId])
+  @@index([accountId])
+}
+
+// ==================== الألماس ====================
+
+model DiamondStone {
+  id             Int       @id @default(autoincrement())
+  sku            String    @unique
+  caratWeight    Float     @default(0)
+  color          String    @default("")   // D, E, F, G, H, I, J, K, L, M, N
+  clarity        String    @default("")   // FL, IF, VVS1, VVS2, VS1, VS2, SI1, SI2, I1, I2, I3
+  cut            String    @default("")   // Excellent, Very Good, Good, Fair, Poor
+  shape          String    @default("Round")
+  certificateNum String    @default("")
+  certBody       String    @default("")   // GIA, IGI, HRD, AGS
+  origin         String    @default("")
+  cost           Float     @default(0)
+  salePrice      Float     @default(0)
+  status         String    @default("available") // available | sold | mounted
+  branchId       Int
+  branch         Branch    @relation(fields: [branchId], references: [id])
+  supplierId     Int?
+  supplier       Supplier? @relation(fields: [supplierId], references: [id])
+  notes          String    @default("")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([branchId])
+  @@index([status])
 }

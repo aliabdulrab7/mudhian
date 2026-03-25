@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { logAction } from "@/lib/audit";
+import { postEntry, buildRefundLines } from "@/lib/accounting";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -24,8 +25,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
         include: {
           jewelryItem: {
             select: {
-              sku: true, category: true, karat: true,
-              metalType: true, netWeight: true,
+              sku: true, barcode: true, category: true, karat: true,
+              metalType: true, grossWeight: true, netWeight: true,
+              stoneType: true, stoneWeight: true, stoneCount: true,
+              stoneValue: true, makingCharges: true,
             },
           },
         },
@@ -39,7 +42,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json(sale);
+  // Fetch latest gold price on or before the sale date
+  const goldPrice = await prisma.metalPrice.findFirst({
+    where: { metalType: "gold", date: { lte: sale.createdAt } },
+    orderBy: { date: "desc" },
+    select: { pricePerGram: true },
+  });
+
+  // Fetch store info settings for receipt header
+  const settingRows = await prisma.appSetting.findMany({
+    where: { key: { in: ["storeVatNumber", "storePhone", "storeAddress", "storeManager"] } },
+    select: { key: true, value: true },
+  });
+  const storeInfo = Object.fromEntries(settingRows.map((s) => [s.key, s.value]));
+
+  return NextResponse.json({ ...sale, goldPricePerGram: goldPrice?.pricePerGram ?? null, storeInfo });
 }
 
 // PATCH /api/pos/[id] — refund a sale
@@ -64,7 +81,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     where: { id: saleId },
     include: {
       saleItems: {
-        include: { jewelryItem: { select: { id: true } } },
+        include: { jewelryItem: { select: { id: true, metalType: true } } },
       },
     },
   });
@@ -140,7 +157,34 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     `فاتورة: ${sale.invoiceNum} — السبب: ${reason || "—"} — المبلغ: ${sale.totalAmount}`
   );
 
-  // Return updated sale
+  // ── Auto-post reversing GL entry (best-effort) ──
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const itemCosts = sale.saleItems.reduce((s: number, si: any) => s + (si.costAtSale ?? 0), 0);
+    const metalType = sale.saleItems[0]?.jewelryItem?.metalType ?? "gold";
+    const refundRef = `REF-${sale.invoiceNum}`;
+    const glLines = buildRefundLines({
+      totalAmount: sale.totalAmount,
+      paymentMethod: sale.paymentMethod,
+      branchId: sale.branchId,
+      invoiceNum: sale.invoiceNum,
+      itemCosts,
+      metalType,
+    });
+    await postEntry({
+      date: new Date(),
+      description: `مرتجع POS — ${sale.invoiceNum}`,
+      ref: refundRef,
+      type: "refund",
+      branchId: sale.branchId,
+      postedBy: session.userId,
+      lines: glLines,
+    });
+  } catch (glErr) {
+    console.error("[PATCH /api/pos] GL refund posting failed:", glErr instanceof Error ? glErr.message : glErr);
+  }
+
+  // Return updated sale with full receipt data
   const updated = await prisma.sale.findUnique({
     where: { id: saleId },
     include: {
@@ -152,8 +196,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         include: {
           jewelryItem: {
             select: {
-              sku: true, category: true, karat: true,
-              metalType: true, netWeight: true,
+              sku: true, barcode: true, category: true, karat: true,
+              metalType: true, grossWeight: true, netWeight: true,
+              stoneType: true, stoneWeight: true, stoneCount: true,
+              stoneValue: true, makingCharges: true,
             },
           },
         },
@@ -161,5 +207,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     },
   });
 
-  return NextResponse.json(updated);
+  const goldPrice = await prisma.metalPrice.findFirst({
+    where: { metalType: "gold", date: { lte: updated!.createdAt } },
+    orderBy: { date: "desc" },
+    select: { pricePerGram: true },
+  });
+  const settingRows = await prisma.appSetting.findMany({
+    where: { key: { in: ["storeVatNumber", "storePhone", "storeAddress", "storeManager"] } },
+    select: { key: true, value: true },
+  });
+  const storeInfo = Object.fromEntries(settingRows.map((s) => [s.key, s.value]));
+
+  return NextResponse.json({ ...updated, goldPricePerGram: goldPrice?.pricePerGram ?? null, storeInfo });
 }

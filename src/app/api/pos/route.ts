@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { logAction } from "@/lib/audit";
+import { postEntry, buildSaleLines } from "@/lib/accounting";
 
 const SOLD_CATEGORIES = ["طقم", "خاتم", "حلق", "اسوارة", "تعليقة", "نص طقم"];
 
@@ -111,7 +112,9 @@ export async function POST(req: NextRequest) {
     ) - discountAmount;
 
     const sale = await prisma.$transaction(async (tx) => {
-      // Create sale
+      // Create sale — stamp costAtSale from current jewelry item cost
+      const costMap = Object.fromEntries(dbItems.map((di) => [di.id, di.cost ?? 0]));
+
       const newSale = await tx.sale.create({
         data: {
           invoiceNum,
@@ -128,6 +131,7 @@ export async function POST(req: NextRequest) {
               jewelryItemId: i.jewelryItemId,
               price: i.price,
               discount: i.discount || 0,
+              costAtSale: costMap[i.jewelryItemId] ?? 0,
             })),
           },
         },
@@ -146,6 +150,31 @@ export async function POST(req: NextRequest) {
 
       return newSale;
     });
+
+    // ── Auto-post GL journal entry (best-effort; failure does NOT fail the sale) ──
+    try {
+      const totalCost = dbItems.reduce((s, di) => s + (di.cost ?? 0), 0);
+      const metalType = dbItems[0]?.metalType ?? "gold";
+      const glLines = buildSaleLines({
+        totalAmount: netSaleTotal,
+        paymentMethod,
+        branchId,
+        invoiceNum,
+        itemCosts: totalCost,
+        metalType,
+      });
+      await postEntry({
+        date: new Date(),
+        description: `مبيعات POS — ${invoiceNum}`,
+        ref: invoiceNum,
+        type: "sale",
+        branchId,
+        postedBy: session.userId,
+        lines: glLines,
+      });
+    } catch (glErr) {
+      console.error("[POST /api/pos] GL posting failed:", glErr instanceof Error ? glErr.message : glErr);
+    }
 
     // ── Sync POS sale to daily drawer (best-effort; failure does NOT fail the sale) ──
     try {

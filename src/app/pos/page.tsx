@@ -60,6 +60,7 @@ export default function POSPage() {
   const [completing, setCompleting] = useState(false);
   const [recentSales, setRecentSales] = useState<RecentSale[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  const [hideRefunded, setHideRefunded] = useState(false);
 
   const fetchRecentSales = useCallback((branchId: number | null) => {
     const url = branchId ? `/api/pos?branchId=${branchId}&limit=15` : `/api/pos?limit=15`;
@@ -193,6 +194,21 @@ export default function POSPage() {
             {branches.find(b => b.id === selectedBranchId)?.name}
           </span>
         )}
+        <div className="flex-1" />
+        <button
+          onClick={() => {
+            setShowHistory(h => !h);
+            if (!showHistory) fetchRecentSales(selectedBranchId);
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-sm font-medium transition ${
+            showHistory
+              ? "bg-navy text-white"
+              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+          }`}
+        >
+          <History size={15} />
+          سجل المبيعات
+        </button>
       </div>
 
       {/* Main layout */}
@@ -412,6 +428,102 @@ export default function POSPage() {
           </div>
         </div>
       </div>
+      {/* History slide-over panel */}
+      {showHistory && (
+        <div className="absolute inset-0 z-30 flex" dir="rtl">
+          {/* Backdrop */}
+          <div
+            className="flex-1 bg-black/30"
+            onClick={() => setShowHistory(false)}
+          />
+          {/* Panel */}
+          <div className="w-full max-w-md bg-white flex flex-col shadow-2xl h-full overflow-hidden">
+            {/* Panel header */}
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <History size={18} style={{ color: "#1e3a5f" }} />
+                <span className="font-bold text-slate-800">سجل المبيعات الأخيرة</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Filter toggle */}
+                <button
+                  onClick={() => setHideRefunded(v => !v)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border-2 transition ${
+                    hideRefunded
+                      ? "border-red-400 bg-red-50 text-red-600"
+                      : "border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300"
+                  }`}
+                >
+                  {hideRefunded ? "إخفاء المُسترجعة" : "إظهار الكل"}
+                </button>
+                <button
+                  onClick={() => setShowHistory(false)}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* Sales list */}
+            <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              {recentSales
+                .filter(s => hideRefunded ? !s.notes?.startsWith("[مرتجع]") : true)
+                .map(sale => {
+                  const isRefunded = sale.notes?.startsWith("[مرتجع]");
+                  return (
+                    <Link
+                      key={sale.id}
+                      href={`/pos/sale/${sale.id}`}
+                      className="flex items-center gap-3 px-5 py-3.5 hover:bg-slate-50 transition"
+                      onClick={() => setShowHistory(false)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm font-semibold text-slate-800">
+                            {sale.invoiceNum}
+                          </span>
+                          {isRefunded && (
+                            <span className="inline-flex items-center gap-1 bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">
+                              مُسترجع
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">
+                          {sale.customer?.name && (
+                            <span className="ml-2">{sale.customer.name}</span>
+                          )}
+                          {sale.employee?.name && (
+                            <span className="ml-2 text-slate-300">· {sale.employee.name}</span>
+                          )}
+                          <span>
+                            {new Date(sale.createdAt).toLocaleDateString("ar-SA-u-nu-latn", {
+                              month: "2-digit", day: "2-digit",
+                              hour: "2-digit", minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className={`font-bold text-sm ${isRefunded ? "text-slate-400 line-through" : "text-slate-800"}`}>
+                          {fmt(sale.totalAmount)}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          {sale.paymentMethod === "cash" ? "نقدي" : sale.paymentMethod === "card" ? "شبكة" : "تحويل"}
+                        </div>
+                      </div>
+                    </Link>
+                  );
+                })}
+              {recentSales.filter(s => hideRefunded ? !s.notes?.startsWith("[مرتجع]") : true).length === 0 && (
+                <div className="text-center py-12 text-slate-300 text-sm">
+                  لا توجد مبيعات
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
